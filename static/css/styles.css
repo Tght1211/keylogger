@@ -1,0 +1,871 @@
+/* Apple Design风格CSS */
+:root {
+    --primary-color: #007aff;
+    --secondary-color: #5856d6;
+    --success-color: #34c759;
+    --danger-color: #ff3b30;
+    --warning-color: #ff9500;
+    --info-color: #5ac8fa;
+    --light-color: #f2f2f7;
+    --dark-color: #1c1c1e;
+    --gray-1: #8e8e93;
+    --gray-2: #aeaeb2;
+    --gray-3: #c7c7cc;
+    --gray-4: #d1d1d6;
+    --gray-5: #e5e5ea;
+    --gray-6: #f2f2f7;
+    --font-family: -apple-system, BlinkMacSystemFont, "San Francisco", "Helvetica Neue", Helvetica, Arial, sans-serif;
+    --border-radius: 12px;
+    --shadow-sm: 0 2px 4px rgba(0,0,0,0.05);
+    --shadow-md: 0 4px 8px rgba(0,0,0,0.1);
+    --shadow-lg: 0 10px 20px rgba(0,0,0,0.15);
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: var(--font-family);
+    background-color: var(--gray-6);
+    color: var(--dark-color);
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+/* 头部样式 */
+header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 30px;
+    padding-bottom: 15px;
+    border-bottom: 1px solid var(--gray-5);
+}
+
+.logo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.logo svg {
+    color: var(--primary-color);
+}
+
+.logo h1 {
+    font-size: 24px;
+    font-weight: 600;
+    color: var(--dark-color);
+}
+
+.time-selector {
+    display: flex;
+    background-color: var(--gray-5);
+    border-radius: 20px;
+    padding: 2px;
+}
+
+.time-selector button {
+    background: none;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 18px;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--gray-1);
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.time-selector button.active {
+    background-color: white;
+    color: var(--dark-color);
+    box-shadow: var(--shadow-sm);
+}
+
+/* 主内容区域 */
+main {
+    display: flex;
+    flex-direction: column;
+    gap: 30px;
+}
+
+/* 统计卡片 */
+.stats-summary {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 20px;
+}
+
+.stat-card {
+    background-color: white;
+    border-radius: var(--border-radius);
+    padding: 20px;
+    box-shadow: var(--shadow-sm);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    display: flex;
+    flex-direction: column;
+}
+
+.stat-card:hover {
+    transform: translateY(-5px);
+    box-shadow: var(--shadow-md);
+}
+
+.stat-card h3 {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--gray-1);
+    margin-bottom: 10px;
+}
+
+.stat-card p {
+    font-size: 24px;
+    font-weight: 600;
+    color: var(--dark-color);
+    margin-bottom: 8px;
+}
+
+.stat-card small {
+    font-size: 12px;
+    color: var(--gray-1);
+}
+
+/* 图表卡片 */
+.charts-container {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 20px;
+    width: 100%;
+}
+
+.chart-card {
+    background: white;
+    border-radius: 12px;
+    padding: 20px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    margin-bottom: 20px;
+}
+
+.chart-card h3 {
+    margin: 0 0 15px 0;
+    color: #333;
+    font-size: 16px;
+}
+
+#operation-distribution-chart {
+    height: 300px;
+    width: 100%;
+    position: relative;
+}
+
+#operation-chart-canvas {
+    width: 100% !important;
+    height: 300px !important;
+}
+
+.operation-distribution {
+    margin-top: 20px;
+    height: 350px;
+}
+
+.time-distribution {
+    width: 100%;
+}
+
+#hourly-chart {
+    width: 100%;
+    min-height: 320px;
+    margin-top: 8px;
+}
+
+/* 图表控制器样式 */
+.chart-controls {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 0;
+    border-bottom: 1px solid var(--gray-5);
+    margin-bottom: 10px;
+}
+
+.chart-controls select {
+    font-family: var(--font-family);
+    font-size: 12px;
+    color: var(--dark-color);
+    border: 1px solid var(--gray-4);
+    border-radius: 6px;
+    padding: 3px 6px;
+    background-color: white;
+    appearance: none;
+    background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+    background-repeat: no-repeat;
+    background-position: right 5px center;
+    background-size: 12px;
+    padding-right: 24px;
+}
+
+.chart-controls select:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 2px rgba(0, 122, 255, 0.2);
+}
+
+/* Plotly图表控制按钮样式 */
+.js-plotly-plot .plotly .modebar {
+    right: 10px !important;
+    top: 10px !important;
+}
+
+.js-plotly-plot .plotly .modebar-btn {
+    padding: 4px !important;
+    border-radius: 6px !important;
+    margin-left: 4px !important;
+}
+
+.js-plotly-plot .plotly .modebar-btn svg {
+    width: 14px !important;
+    height: 14px !important;
+}
+
+.js-plotly-plot .plotly .modebar-btn:hover {
+    background-color: rgba(0, 122, 255, 0.1) !important;
+}
+
+.js-plotly-plot .plotly .rangeslider-slidebox {
+    background: rgba(0, 122, 255, 0.2) !important;
+    border: 1px solid rgba(0, 122, 255, 0.4) !important;
+    border-radius: 4px !important;
+}
+
+.js-plotly-plot .plotly .rangeslider-handle {
+    background: rgba(0, 122, 255, 0.8) !important;
+    border-radius: 4px !important;
+}
+
+.chart-card:hover {
+    transform: translateY(-3px);
+    box-shadow: var(--shadow-md);
+}
+
+.chart-card h3::before {
+    content: '';
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background-color: var(--primary-color);
+    margin-right: 6px;
+}
+
+/* 键盘热力图 */
+.keyboard-heatmap {
+    margin: 20px 0;
+    padding: 20px;
+    background-color: white;
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.keyboard-heatmap:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.08);
+}
+
+.keyboard-heatmap h3 {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--dark-color);
+    margin-bottom: 15px;
+    display: flex;
+    align-items: center;
+}
+
+.keyboard-heatmap h3::before {
+    content: '⌨️';
+    display: inline-block;
+    margin-right: 8px;
+    font-size: 18px;
+}
+
+.keyboard-row {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 6px;
+}
+
+.keyboard-key {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    width: 58px;
+    height: 48px;
+    margin: 4px;
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: 500;
+    color: #333;
+    background-color: #f5f5f7;
+    box-shadow: 0 2px 3px rgba(0, 0, 0, 0.05);
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    cursor: pointer;
+    transition: all 0.2s;
+    position: relative;
+    overflow: hidden;
+    padding: 8px 6px;
+}
+
+.keyboard-key .key-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+}
+
+.keyboard-key .key-name {
+    font-size: 16px;
+    font-weight: 600;
+    line-height: 1;
+    margin-bottom: 5px;
+    color: #000;
+    text-transform: uppercase;
+}
+
+.keyboard-key .key-count {
+    font-size: 10px;
+    font-weight: 500;
+    color: rgba(0, 0, 0, 0.7);
+    line-height: 1;
+    background-color: rgba(255, 255, 255, 0.6);
+    padding: 2px 4px;
+    border-radius: 4px;
+}
+
+.keyboard-key:hover {
+    transform: translateY(-2px) scale(1.05);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.keyboard-key.space-key {
+    width: 260px;
+}
+
+.keyboard-key.backspace-key {
+    width: 130px;
+}
+
+.keyboard-key.enter-key {
+    width: 100px;
+}
+
+.keyboard-key.shift-key {
+    width: 80px;
+}
+
+.keyboard-key.tab-key, .keyboard-key.caps-key {
+    width: 70px;
+}
+
+.keyboard-key.mod-key {
+    width: 60px;
+}
+
+/* 鼠标热力图容器 */
+.mouse-heatmap {
+    background-color: white;
+    border-radius: var(--border-radius);
+    padding: 20px;
+    box-shadow: var(--shadow-sm);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    margin-bottom: 30px;
+}
+
+.mouse-heatmap:hover {
+    transform: translateY(-3px);
+    box-shadow: var(--shadow-md);
+}
+
+.mouse-heatmap h3 {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--dark-color);
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+}
+
+.mouse-main-content {
+    display: flex;
+    gap: 30px;
+}
+
+.mouse-icon-wrapper {
+    flex: 0 0 300px;
+    padding: 15px;
+    background: var(--gray-6);
+    border-radius: var(--border-radius);
+    height: 480px;
+}
+
+.mouse-icon-container {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 10px;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    position: relative;
+    padding: 10px;
+    margin-top: 50px;
+}
+
+.mouse-icon {
+    position: absolute;
+    top: 70%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 500px;
+    height: 500px;
+    opacity: 0.15;
+    pointer-events: none;
+    z-index: 0;
+}
+
+.mouse-icon svg {
+    width: 100%;
+    height: 100%;
+    filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.1));
+}
+
+.mouse-part {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    min-width: 60px;
+    height: 50px;
+    border-radius: 8px;
+    background-color: var(--gray-5);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    transition: all 0.2s ease;
+    position: relative;
+    overflow: hidden;
+    cursor: pointer;
+    z-index: 1;
+    padding: 6px;
+}
+
+.mouse-part:hover {
+    transform: translateY(-2px) scale(1.05);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+.mouse-part .key-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+    gap: 2px;
+}
+
+.mouse-part .key-name {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--gray-1);
+}
+
+.mouse-part .key-count {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--dark-color);
+}
+
+/* 鼠标按键布局 */
+.mouse-part.left-button {
+    grid-row: 1;
+    grid-column: 1 / span 2;
+}
+
+.mouse-part.right-button {
+    grid-row: 1;
+    grid-column: 4 / span 2;
+}
+
+.mouse-part.scroll-wheel {
+    grid-row: 2;
+    grid-column: 3;
+}
+
+.mouse-part.middle-button {
+    grid-row: 3;
+    grid-column: 3;
+}
+
+.mouse-part.movement {
+    grid-row: 4;
+    grid-column: 3;
+}
+
+.mouse-stats {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.mouse-stat-item {
+    background: var(--gray-6);
+    border-radius: var(--border-radius);
+    padding: 15px;
+}
+
+.mouse-stat-item h4 {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--gray-1);
+    margin-bottom: 8px;
+}
+
+.mouse-stat-value {
+    font-size: 20px;
+    font-weight: 600;
+    color: var(--dark-color);
+    margin-bottom: 8px;
+}
+
+.mouse-stat-details {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
+    gap: 8px;
+}
+
+.mouse-stat-detail {
+    text-align: center;
+    padding: 6px;
+    background: white;
+    border-radius: 6px;
+    transition: all 0.2s ease;
+}
+
+.mouse-stat-detail:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-sm);
+}
+
+.mouse-stat-detail-value {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--dark-color);
+}
+
+.mouse-stat-detail-label {
+    font-size: 11px;
+    color: var(--gray-1);
+    margin-top: 2px;
+}
+
+/* 日历热力图 */
+.calendar-section {
+    background-color: white;
+    border-radius: var(--border-radius);
+    padding: 15px;
+    box-shadow: var(--shadow-sm);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.calendar-section:hover {
+    transform: translateY(-3px);
+    box-shadow: var(--shadow-md);
+}
+
+.calendar-section h3 {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--dark-color);
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+}
+
+.calendar-section h3::before {
+    content: '';
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background-color: var(--info-color);
+    margin-right: 5px;
+}
+
+/* 日历头部 */
+.calendar-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.month-selector {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.month-nav {
+    background: none;
+    border: none;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: var(--primary-color);
+    transition: all 0.2s ease;
+    font-size: 14px;
+    padding: 0;
+}
+
+.month-nav:hover {
+    background-color: var(--gray-5);
+}
+
+.month-nav:active {
+    transform: scale(0.95);
+}
+
+#current-month {
+    font-weight: 600;
+    font-size: 15px;
+    min-width: 100px;
+    text-align: center;
+    color: var(--dark-color);
+}
+
+.view-toggle {
+    display: flex;
+    background-color: var(--gray-5);
+    border-radius: 6px;
+    overflow: hidden;
+    padding: 2px;
+}
+
+.view-toggle button {
+    background: none;
+    border: none;
+    padding: 3px 8px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--gray-1);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border-radius: 4px;
+}
+
+.view-toggle button.active {
+    background-color: white;
+    color: var(--dark-color);
+    box-shadow: var(--shadow-sm);
+}
+
+/* 日历网格 - 苹果风格 */
+#calendar-heatmap {
+    margin-top: 10px;
+}
+
+.calendar-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 0;
+    max-width: 100%;
+    border-radius: 10px;
+    overflow: hidden;
+    border: 1px solid var(--gray-5);
+}
+
+.calendar-day-header {
+    text-align: center;
+    font-weight: 500;
+    padding: 5px 0;
+    color: var(--gray-1);
+    font-size: 12px;
+    background-color: var(--gray-6);
+    border-bottom: 1px solid var(--gray-5);
+    border-right: 1px solid var(--gray-5);
+}
+
+.calendar-day-header:last-child {
+    border-right: none;
+}
+
+.calendar-day {
+    padding: 2px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    overflow: hidden;
+    border-right: 1px solid var(--gray-5);
+    border-bottom: 1px solid var(--gray-5);
+    min-height: 40px;
+    max-height: 45px;
+    background-color: white;
+    transition: background-color 0.2s ease;
+}
+
+.calendar-day:nth-child(7n) {
+    border-right: none;
+}
+
+.calendar-day:hover {
+    background-color: var(--gray-6);
+}
+
+.calendar-day.today {
+    background-color: rgba(90, 200, 250, 0.1);
+}
+
+.calendar-day.today .calendar-day-number {
+    color: var(--primary-color);
+    font-weight: 600;
+}
+
+.calendar-day-number {
+    font-size: 12px;
+    font-weight: 400;
+    margin-bottom: 1px;
+    position: relative;
+    z-index: 2;
+}
+
+/* 删除不需要的元素 */
+.calendar-day-dot,
+.calendar-day-indicator,
+.calendar-day-badge {
+    display: none;
+}
+
+.calendar-stats {
+    font-size: 9px;
+    width: 100%;
+    text-align: center;
+    font-weight: 500;
+}
+
+/* 日历图例 */
+.calendar-legend {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 6px;
+    margin-top: 8px;
+    padding: 5px;
+    background-color: var(--gray-6);
+    border-radius: 6px;
+    flex-wrap: wrap;
+}
+
+.legend-title {
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--gray-1);
+    margin-right: 2px;
+}
+
+.legend-item {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+}
+
+.legend-color {
+    width: 10px;
+    height: 10px;
+    border-radius: 2px;
+    border: 0.5px solid var(--gray-4);
+}
+
+.legend-label {
+    font-size: 9px;
+    color: var(--gray-1);
+}
+
+/* 页脚 */
+footer {
+    margin-top: 40px;
+    padding-top: 20px;
+    border-top: 1px solid var(--gray-5);
+    color: var(--gray-2);
+    font-size: 14px;
+    text-align: center;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+    .charts-container {
+        grid-template-columns: 1fr;
+    }
+    
+    .stats-summary {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 480px) {
+    .stats-summary {
+        grid-template-columns: 1fr;
+    }
+    
+    header {
+        flex-direction: column;
+        gap: 15px;
+        align-items: flex-start;
+    }
+    
+    .time-selector {
+        width: 100%;
+        justify-content: space-between;
+    }
+}
+
+/* 移除原有的鼠标指示器和图像容器样式 */
+.mouse-image-container,
+.mouse-indicator {
+    display: none;
+}
+
+@media (max-width: 900px) {
+    .mouse-main-content {
+        flex-direction: column;
+    }
+    
+    .mouse-icon-wrapper {
+        flex: none;
+        width: 100%;
+    }
+    
+    .mouse-stats {
+        width: 100%;
+    }
+} 

@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>工作留痕 - 统计面板</title>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⌨️</text></svg>">
+    
+    <!-- Three.js库 -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.132.2/build/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.132.2/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.132.2/examples/js/renderers/CSS2DRenderer.js"></script>
+    
+    <!-- Chart.js库 -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.7.1/dist/chart.min.js"></script>
+    
+    <!-- Plotly.js库 -->
+    <script src="https://cdn.jsdelivr.net/npm/plotly.js@2.18.2/dist/plotly.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/luxon@3.0.3/build/global/luxon.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="logo">
+                <svg viewBox="0 0 24 24" width="24" height="24">
+                    <path d="M19 6h-4V2H9v4H5l7 7 7-7zm-8 13v-2h2v2h-2z" fill="currentColor"/>
+                </svg>
+                <h1>工作留痕</h1>
+            </div>
+            <div class="time-selector">
+                <button id="today-btn" class="active">今日</button>
+                <button id="week-btn">本周</button>
+                <button id="month-btn">本月</button>
+            </div>
+        </header>
+        
+        <main>
+            <section class="stats-summary">
+                <div class="stat-card total-keystrokes">
+                    <h3>总操作次数</h3>
+                    <p id="total-count">加载中...</p>
+                </div>
+                <div class="stat-card avg-per-hour">
+                    <h3>平均每小时</h3>
+                    <p id="avg-per-hour">加载中...</p>
+                </div>
+                <div class="stat-card peak-hour">
+                    <h3>高峰时段</h3>
+                    <p id="peak-hour">加载中...</p>
+                </div>
+                <div class="stat-card active-time">
+                    <h3>有效工作时长</h3>
+                    <p id="active-time">加载中...</p>
+                    <small>5分钟无操作视为暂停</small>
+                </div>
+                <div class="stat-card total-time">
+                    <h3>总工作时长</h3>
+                    <p id="total-time">加载中...</p>
+                    <small>首次至最后操作的总时长</small>
+                </div>
+            </section>
+            
+            <section class="charts-container">
+                <div class="chart-card time-distribution">
+                    <h3>时间分布</h3>
+                    <div id="hourly-chart"></div>
+                </div>
+                <div class="chart-card operation-distribution">
+                    <h3>操作类型分布</h3>
+                    <div id="operation-distribution-chart">
+                        <div style="text-align: center; padding: 20px; color: #888;">
+                            <span>加载中...</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+            
+            <section class="keyboard-heatmap">
+                <div id="keyboard-container"></div>
+            </section>
+            
+            <section class="calendar-section">
+                <h3>工作时长日历</h3>
+                <div class="calendar-header">
+                    <div class="month-selector">
+                        <button id="prev-month" class="month-nav">⟨</button>
+                        <span id="current-month">2023年03月</span>
+                        <button id="next-month" class="month-nav">⟩</button>
+                    </div>
+                    <div class="view-toggle">
+                        <button id="total-hours-btn" class="active">总工作时长</button>
+                        <button id="active-hours-btn">有效工作时长</button>
+                    </div>
+                </div>
+                <div id="calendar-heatmap"></div>
+            </section>
+        </main>
+        
+        <footer>
+            <p>© 2023 工作留痕 - 工作效率分析工具</p>
+        </footer>
+    </div>
+    
+    <script src="/static/js/main.js"></script>
+</body>
+</html> 
