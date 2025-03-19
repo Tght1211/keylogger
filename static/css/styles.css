@@ -868,4 +868,87 @@ footer {
     .mouse-stats {
         width: 100%;
     }
+}
+
+/* 分钟级活动曲线图 */
+.minute-activity {
+    width: 100%;
+    margin-bottom: 30px;
+    background: white;
+    border-radius: var(--border-radius);
+    padding: 20px;
+    box-shadow: var(--shadow-sm);
+}
+
+#minute-activity-chart {
+    width: 100%;
+    height: 350px;
+    margin-top: 10px;
+    background: white;
+}
+
+.chart-controls {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+}
+
+#minute-chart-day-selector {
+    padding: 6px 12px;
+    border-radius: 6px;
+    border: 1px solid var(--gray-4);
+    background: white;
+    font-family: var(--font-family);
+    font-size: 14px;
+    color: var(--dark-color);
+    cursor: pointer;
+}
+
+#minute-chart-date-picker {
+    padding: 6px 12px;
+    border-radius: 6px;
+    border: 1px solid var(--gray-4);
+    background: white;
+    font-family: var(--font-family);
+    font-size: 14px;
+    color: var(--dark-color);
+    margin-left: 10px;
+}
+
+.zoom-controls {
+    display: flex;
+    gap: 8px;
+}
+
+.zoom-controls button {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    border: 1px solid var(--gray-4);
+    background: white;
+    color: var(--dark-color);
+    font-size: 16px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+}
+
+.zoom-controls button:hover {
+    background: var(--gray-6);
+    border-color: var(--gray-3);
+}
+
+.zoom-controls button:active {
+    transform: scale(0.95);
+    background: var(--gray-5);
+}
+
+.chart-info {
+    margin-top: 10px;
+    text-align: center;
+    color: var(--gray-1);
+    font-size: 12px;
 } 

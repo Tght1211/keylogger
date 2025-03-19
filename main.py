@@ -8,37 +8,97 @@ import webbrowser
 from pathlib import Path
 from pynput import keyboard, mouse
 import tkinter as tk
-from tkinter import ttk
+from tkinter import ttk, font
 from flask import Flask, render_template, jsonify, send_from_directory, request
 import calendar
+import sqlite3
+from sqlalchemy import create_engine, Column, Integer, String, Text, inspect
+from sqlalchemy.orm import declarative_base, sessionmaker
 
 # 全局变量
 DATA_DIR = Path(__file__).parent / "data"
+DB_PATH = DATA_DIR / "keylogger.db"
 MAC_ADDRESS = str(uuid.getnode())
 TODAY = datetime.datetime.now().strftime("%Y-%m-%d")
-keystroke_data = {
-    "mac": MAC_ADDRESS,
-    "date": TODAY,
-    "result": [],
-    "first_activity_time": None,  # 记录当日第一次活动时间
-    "last_activity_time": None    # 记录当日最后一次活动时间
-}
-last_activity_time = None
-app = Flask(__name__)
 is_recording = True
+app = Flask(__name__)
 
 # 确保数据目录存在
 os.makedirs(DATA_DIR, exist_ok=True)
 
-# 保存数据
-def save_data():
-    today_file = DATA_DIR / f"{TODAY}.json"
-    with open(today_file, "w") as f:
-        json.dump(keystroke_data, f, indent=4)
+# 数据库设置
+Base = declarative_base()
+
+class KeystrokeEvent(Base):
+    __tablename__ = 'keystroke_events'
+    
+    id = Column(Integer, primary_key=True)
+    mac = Column(String(50))
+    date = Column(String(10))
+    action = Column(String(50))
+    time = Column(Integer)
+    type = Column(String(10))
+    
+class ActivityTime(Base):
+    __tablename__ = 'activity_times'
+    
+    id = Column(Integer, primary_key=True)
+    mac = Column(String(50))
+    date = Column(String(10))
+    first_activity_time = Column(Integer, nullable=True)
+    last_activity_time = Column(Integer, nullable=True)
+
+# 创建数据库引擎和会话
+engine = create_engine(f'sqlite:///{DB_PATH}')
+Session = sessionmaker(bind=engine)
+session = Session()
+
+# 初始化数据库
+def init_db():
+    # 如果表不存在，创建表
+    if not inspect(engine).has_table('keystroke_events'):
+        Base.metadata.create_all(engine)
+    if not inspect(engine).has_table('activity_times'):
+        Base.metadata.create_all(engine)
+    
+    # 检查今天的活动时间记录是否存在
+    activity = session.query(ActivityTime).filter_by(mac=MAC_ADDRESS, date=TODAY).first()
+    if not activity:
+        # 创建新的活动时间记录
+        activity = ActivityTime(mac=MAC_ADDRESS, date=TODAY)
+        session.add(activity)
+        session.commit()
+
+# 保存按键/鼠标事件
+def save_event(action, event_type, timestamp):
+    event = KeystrokeEvent(
+        mac=MAC_ADDRESS,
+        date=TODAY,
+        action=action,
+        time=timestamp,
+        type=event_type
+    )
+    session.add(event)
+    
+    # 更新活动时间
+    activity = session.query(ActivityTime).filter_by(mac=MAC_ADDRESS, date=TODAY).first()
+    if not activity:
+        activity = ActivityTime(mac=MAC_ADDRESS, date=TODAY)
+        session.add(activity)
+    
+    # 更新最后活动时间
+    activity.last_activity_time = timestamp
+    
+    # 如果是首次记录，更新第一次活动时间
+    if activity.first_activity_time is None:
+        activity.first_activity_time = timestamp
+    
+    # 每100次操作提交一次
+    if session.new and len(session.new) >= 100:
+        session.commit()
 
 # 处理键盘事件
 def on_press(key):
-    global last_activity_time
     if not is_recording:
         return
     
@@ -66,56 +126,27 @@ def on_press(key):
 
     # 获取当前时间戳
     timestamp = int(datetime.datetime.now().timestamp() * 1000)
-    current_time = datetime.datetime.now()
     
-    # 添加按键记录
-    keystroke_data["result"].append({
-        "action": key_char,
-        "time": timestamp,
-        "type": "keyboard"
-    })
-    
-    # 更新最后活动时间
-    last_activity_time = current_time
-    keystroke_data["last_activity_time"] = timestamp
-    
-    # 如果是首次记录，更新第一次活动时间
-    if keystroke_data["first_activity_time"] is None:
-        keystroke_data["first_activity_time"] = timestamp
-    
-    # 每100次按键保存一次数据
-    if len(keystroke_data["result"]) % 100 == 0:
-        save_data()
+    # 保存按键事件
+    save_event(key_char, "keyboard", timestamp)
 
 # 处理鼠标移动
 def on_move(x, y):
-    global last_activity_time
     if not is_recording:
         return
-    
-    # 仅在移动超过阈值距离时记录(避免过度记录)
-    # 这里可以根据需要添加距离检查
     
     # 获取当前时间戳
     timestamp = int(datetime.datetime.now().timestamp() * 1000)
     current_time = datetime.datetime.now()
     
+    # 全局变量用于限制移动事件记录频率
+    global last_move_time
+    
     # 每秒最多记录一次移动，避免数据过多
-    if last_activity_time is None or (current_time - last_activity_time).total_seconds() >= 1:
-        # 添加鼠标移动记录
-        keystroke_data["result"].append({
-            "action": "slide",
-            "time": timestamp,
-            "type": "mouse"
-        })
-        
-        # 更新最后活动时间
-        last_activity_time = current_time
-        keystroke_data["last_activity_time"] = timestamp
-        
-        # 如果是首次记录，更新第一次活动时间
-        if keystroke_data["first_activity_time"] is None:
-            keystroke_data["first_activity_time"] = timestamp
+    if last_move_time is None or (current_time - last_move_time).total_seconds() >= 1:
+        # 保存鼠标移动事件
+        save_event("slide", "mouse", timestamp)
+        last_move_time = current_time
 
 # 处理鼠标点击
 def on_click(x, y, button, pressed):
@@ -124,7 +155,6 @@ def on_click(x, y, button, pressed):
     
     # 获取当前时间戳
     timestamp = int(datetime.datetime.now().timestamp() * 1000)
-    current_time = datetime.datetime.now()
     
     # 识别按键
     if button == mouse.Button.left:
@@ -136,25 +166,8 @@ def on_click(x, y, button, pressed):
     else:
         button_name = str(button)
     
-    # 添加鼠标点击记录
-    keystroke_data["result"].append({
-        "action": button_name,
-        "time": timestamp,
-        "type": "mouse"
-    })
-    
-    # 更新最后活动时间
-    global last_activity_time
-    last_activity_time = current_time
-    keystroke_data["last_activity_time"] = timestamp
-    
-    # 如果是首次记录，更新第一次活动时间
-    if keystroke_data["first_activity_time"] is None:
-        keystroke_data["first_activity_time"] = timestamp
-    
-    # 每100次操作保存一次数据
-    if len(keystroke_data["result"]) % 100 == 0:
-        save_data()
+    # 保存鼠标点击事件
+    save_event(button_name, "mouse", timestamp)
 
 # 处理鼠标滚轮
 def on_scroll(x, y, dx, dy):
@@ -163,27 +176,9 @@ def on_scroll(x, y, dx, dy):
     
     # 获取当前时间戳
     timestamp = int(datetime.datetime.now().timestamp() * 1000)
-    current_time = datetime.datetime.now()
     
-    # 添加鼠标滚轮记录
-    keystroke_data["result"].append({
-        "action": "roller",
-        "time": timestamp,
-        "type": "mouse"
-    })
-    
-    # 更新最后活动时间
-    global last_activity_time
-    last_activity_time = current_time
-    keystroke_data["last_activity_time"] = timestamp
-    
-    # 如果是首次记录，更新第一次活动时间
-    if keystroke_data["first_activity_time"] is None:
-        keystroke_data["first_activity_time"] = timestamp
-    
-    # 每100次操作保存一次数据
-    if len(keystroke_data["result"]) % 100 == 0:
-        save_data()
+    # 保存鼠标滚轮事件
+    save_event("roller", "mouse", timestamp)
 
 # Flask路由
 @app.route('/')
@@ -201,36 +196,38 @@ def favicon():
 
 @app.route('/api/keystroke_data')
 def get_keystroke_data():
-    # 读取所有数据文件
-    all_data = []
-    print("正在读取数据文件...")
-    
     try:
-        for data_file in DATA_DIR.glob("*.json"):
-            print(f"发现数据文件: {data_file}")
-            try:
-                with open(data_file, "r") as f:
-                    try:
-                        data = json.load(f)
-                        # 检查数据格式
-                        if "date" in data and "result" in data:
-                            # 兼容旧数据格式，确保所有记录都有type字段
-                            for item in data["result"]:
-                                if "type" not in item:
-                                    if "keyboard" in item:
-                                        item["action"] = item["keyboard"]
-                                        del item["keyboard"]
-                                        item["type"] = "keyboard"
-                            all_data.append(data)
-                            print(f"成功加载数据文件: {data_file}, 操作数量: {len(data.get('result', []))}")
-                        else:
-                            print(f"数据文件格式不正确: {data_file}")
-                    except json.JSONDecodeError:
-                        print(f"解析数据文件失败: {data_file}")
-            except Exception as e:
-                print(f"读取文件时出错: {data_file}, 错误: {str(e)}")
+        # 获取所有日期的数据
+        all_data = []
+        dates = session.query(ActivityTime.date).distinct().all()
         
-        print(f"总共找到 {len(all_data)} 个有效数据文件")
+        for (date,) in dates:
+            # 获取该日期的活动时间
+            activity = session.query(ActivityTime).filter_by(date=date).first()
+            
+            # 获取该日期的所有事件
+            events = session.query(KeystrokeEvent).filter_by(date=date).all()
+            
+            # 构建日期数据
+            date_data = {
+                "mac": MAC_ADDRESS,
+                "date": date,
+                "result": [
+                    {
+                        "action": event.action,
+                        "time": event.time,
+                        "type": event.type
+                    } for event in events
+                ]
+            }
+            
+            # 添加活动时间
+            if activity:
+                date_data["first_activity_time"] = activity.first_activity_time
+                date_data["last_activity_time"] = activity.last_activity_time
+            
+            all_data.append(date_data)
+        
         return jsonify(all_data)
     except Exception as e:
         print(f"API调用出错: {str(e)}")
@@ -238,92 +235,73 @@ def get_keystroke_data():
 
 @app.route('/api/today_data')
 def get_today_data():
-    save_data()  # 确保最新数据已保存
-    today_file = DATA_DIR / f"{TODAY}.json"
-    
-    print(f"请求今日数据，文件路径: {today_file}")
+    session.commit()  # 确保最新数据已保存
     
     try:
-        if today_file.exists():
-            try:
-                with open(today_file, "r") as f:
-                    try:
-                        data = json.load(f)
-                        # 检查数据格式
-                        if "date" in data and "result" in data:
-                            # 兼容旧数据格式，确保所有记录都有type字段
-                            for item in data["result"]:
-                                if "type" not in item:
-                                    if "keyboard" in item:
-                                        item["action"] = item["keyboard"]
-                                        del item["keyboard"]
-                                        item["type"] = "keyboard"
-                            print(f"成功读取今日数据，操作数量: {len(data.get('result', []))}")
-                            return jsonify(data)
-                        else:
-                            print("今日数据文件格式不正确")
-                            return jsonify({"error": "数据格式不正确"})
-                    except json.JSONDecodeError:
-                        print("解析今日数据文件失败")
-                        return jsonify({"error": "数据文件解析失败"})
-            except Exception as e:
-                print(f"读取今日数据文件时出错: {str(e)}")
-                return jsonify({"error": f"数据文件读取失败: {str(e)}"})
-        else:
-            # 如果文件不存在但内存中有数据
-            if len(keystroke_data["result"]) > 0:
-                print("今日数据文件不存在，返回内存中的数据")
-                return jsonify(keystroke_data)
-            else:
-                print("今日数据文件不存在且内存中无数据")
-                return jsonify({"date": TODAY, "mac": MAC_ADDRESS, "result": []})
+        # 获取今日活动时间
+        activity = session.query(ActivityTime).filter_by(date=TODAY).first()
+        
+        # 获取今日所有事件
+        events = session.query(KeystrokeEvent).filter_by(date=TODAY).all()
+        
+        # 构建今日数据
+        today_data = {
+            "mac": MAC_ADDRESS,
+            "date": TODAY,
+            "result": [
+                {
+                    "action": event.action,
+                    "time": event.time,
+                    "type": event.type
+                } for event in events
+            ]
+        }
+        
+        # 添加活动时间
+        if activity:
+            today_data["first_activity_time"] = activity.first_activity_time
+            today_data["last_activity_time"] = activity.last_activity_time
+        
+        return jsonify(today_data)
     except Exception as e:
-        print(f"今日数据API调用出错: {str(e)}")
+        print(f"获取今日数据出错: {str(e)}")
         return jsonify({"error": f"数据加载失败: {str(e)}"})
 
 @app.route('/api/operation_distribution')
 def get_operation_distribution():
     try:
-        # 获取时间范围参数
-        mode = request.args.get('mode', 'today')  # 默认是today模式
+        # 获取日期参数
+        date = request.args.get('date', TODAY)
+        mode = request.args.get('mode', 'today')
         
+        # 初始化24小时的数据结构
+        hourly_data = {
+            "keyboard": [0] * 24,  # 键盘操作
+            "mouse": [0] * 24,     # 鼠标操作
+            "total": [0] * 24      # 总操作
+        }
+
         if mode == 'today':
             # 只处理今日数据
-            today_file = DATA_DIR / f"{TODAY}.json"
-            if not today_file.exists():
-                return jsonify({"error": "今日数据不存在"})
-                
-            with open(today_file, "r") as f:
-                data = json.load(f)
-                
-            if not data.get("result"):
-                return jsonify({"error": "没有操作记录"})
-                
-            # 初始化24小时的数据结构
-            hourly_data = {
-                "keyboard": [0] * 24,  # 键盘操作
-                "mouse": [0] * 24,     # 鼠标操作
-                "total": [0] * 24      # 总操作
-            }
+            events = session.query(KeystrokeEvent).filter_by(date=TODAY).all()
             
             # 统计每个小时的操作次数
-            for record in data["result"]:
-                timestamp = record["time"]
+            for event in events:
+                timestamp = event.time
                 hour = datetime.datetime.fromtimestamp(timestamp/1000).hour
                 
-                if record["type"] == "keyboard":
+                if event.type == "keyboard":
                     hourly_data["keyboard"][hour] += 1
-                elif record["type"] == "mouse":
+                elif event.type == "mouse":
                     hourly_data["mouse"][hour] += 1
                     
                 hourly_data["total"][hour] += 1
-                
+            
             return jsonify(hourly_data)
         
         elif mode in ['week', 'month']:
-            # 周或月模式，需要处理多个文件
+            # 周或月模式，需要处理多个日期
             now = datetime.datetime.now()
-            all_files = []
             
             # 确定日期范围
             if mode == 'week':
@@ -338,138 +316,229 @@ def get_operation_distribution():
                 _, last_day = calendar.monthrange(year, month)
                 date_range = [datetime.date(year, month, day) for day in range(1, last_day + 1)]
             
-            # 初始化24小时的数据结构
-            hourly_data = {
-                "keyboard": [0] * 24,  # 键盘操作
-                "mouse": [0] * 24,     # 鼠标操作
-                "total": [0] * 24      # 总操作
-            }
-            
-            # 遍历日期范围内的所有文件
+            # 遍历日期范围内的所有数据
             for date in date_range:
                 date_str = date.strftime("%Y-%m-%d")
-                file_path = DATA_DIR / f"{date_str}.json"
+                events = session.query(KeystrokeEvent).filter_by(date=date_str).all()
                 
-                if file_path.exists():
-                    try:
-                        with open(file_path, "r") as f:
-                            data = json.load(f)
+                for event in events:
+                    timestamp = event.time
+                    hour = datetime.datetime.fromtimestamp(timestamp/1000).hour
+                    
+                    if event.type == "keyboard":
+                        hourly_data["keyboard"][hour] += 1
+                    elif event.type == "mouse":
+                        hourly_data["mouse"][hour] += 1
                         
-                        if data.get("result"):
-                            for record in data["result"]:
-                                timestamp = record["time"]
-                                hour = datetime.datetime.fromtimestamp(timestamp/1000).hour
-                                
-                                if record.get("type") == "keyboard":
-                                    hourly_data["keyboard"][hour] += 1
-                                elif record.get("type") == "mouse":
-                                    hourly_data["mouse"][hour] += 1
-                                    
-                                hourly_data["total"][hour] += 1
-                    except Exception as e:
-                        print(f"处理文件 {file_path} 时出错: {str(e)}")
+                    hourly_data["total"][hour] += 1
             
             return jsonify(hourly_data)
         
         else:
             return jsonify({"error": "不支持的模式"})
-            
+        
     except Exception as e:
-        return jsonify({"error": f"获取操作分布数据失败: {str(e)}"})
+        print(f"获取操作分布出错: {str(e)}")
+        return jsonify({"error": f"数据加载失败: {str(e)}"})
+
+# 初始化数据库
+init_db()
 
 # GUI类
 class KeyLoggerApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("键盘&鼠标活动记录")
-        self.root.geometry("300x200")
+        self.root.title("操作记录器")
+        self.root.geometry("400x320")
+        self.root.configure(bg="#f5f5f7")
         self.root.resizable(False, False)
         
-        # 设置样式
-        style = ttk.Style()
-        style.configure("TButton", font=("Helvetica", 12))
-        style.configure("TLabel", font=("Helvetica", 12))
+        # 创建自定义图标
+        self.create_custom_icon()
         
-        # 创建组件
-        main_frame = ttk.Frame(root, padding=10)
-        main_frame.pack(fill="both", expand=True)
+        # Apple风格颜色
+        self.colors = {
+            "bg": "#f5f5f7",           # 背景色
+            "accent": "#0071e3",       # 蓝色强调色
+            "text": "#1d1d1f",         # 文本颜色
+            "secondary_text": "#86868b", # 次要文本颜色
+            "success": "#31b057",      # 成功状态颜色
+            "warning": "#ff9f0a"       # 警告状态颜色
+        }
         
-        status_frame = ttk.Frame(main_frame)
-        status_frame.pack(pady=10)
+        # 自定义字体
+        self.default_font = font.nametofont("TkDefaultFont")
+        self.default_font.configure(family="SF Pro Display, Helvetica, Arial", size=11)
+        self.root.option_add("*Font", self.default_font)
         
-        ttk.Label(status_frame, text="状态: ").pack(side="left")
-        self.status_label = ttk.Label(status_frame, text="正在记录", foreground="green")
-        self.status_label.pack(side="left")
+        # 创建主容器
+        self.main_frame = tk.Frame(root, bg=self.colors["bg"])
+        self.main_frame.pack(fill=tk.BOTH, expand=True, padx=30, pady=30)
         
-        self.toggle_button = ttk.Button(main_frame, text="暂停记录", command=self.toggle_recording)
-        self.toggle_button.pack(pady=10, fill="x")
+        # 应用标题
+        self.title_label = tk.Label(
+            self.main_frame, 
+            text="操作记录器", 
+            font=("SF Pro Display, Helvetica, Arial", 22, "bold"),
+            fg=self.colors["text"],
+            bg=self.colors["bg"]
+        )
+        self.title_label.pack(pady=(0, 20), anchor="w")
         
-        ttk.Button(main_frame, text="查看统计", command=self.show_stats).pack(pady=10, fill="x")
+        # 状态指示器
+        self.status_frame = tk.Frame(self.main_frame, bg=self.colors["bg"])
+        self.status_frame.pack(fill=tk.X, pady=(0, 25))
         
-        # 显示总操作数
-        self.keystroke_count = ttk.Label(main_frame, text=f"今日操作: {len(keystroke_data['result'])}")
-        self.keystroke_count.pack(pady=10)
+        self.status_indicator = tk.Canvas(
+            self.status_frame, 
+            width=12, 
+            height=12, 
+            bg=self.colors["bg"], 
+            highlightthickness=0
+        )
+        self.status_indicator.pack(side=tk.LEFT, padx=(0, 10))
+        self.status_indicator.create_oval(2, 2, 10, 10, fill=self.colors["success"], outline="")
         
-        # 定期更新界面
+        self.status_label = tk.Label(
+            self.status_frame, 
+            text="正在记录操作", 
+            font=("SF Pro Display, Helvetica, Arial", 14),
+            fg=self.colors["text"],
+            bg=self.colors["bg"]
+        )
+        self.status_label.pack(side=tk.LEFT)
+        
+        # 创建按钮风格
+        self.style = ttk.Style()
+        self.style.configure(
+            "Primary.TButton", 
+            font=("SF Pro Display, Helvetica, Arial", 12),
+            background=self.colors["accent"],
+            foreground="white",
+            borderwidth=0,
+            focusthickness=0,
+            padding=(16, 10)
+        )
+        self.style.map(
+            "Primary.TButton",
+            background=[("active", "#0059B3"), ("pressed", "#004080")]
+        )
+        
+        self.style.configure(
+            "Secondary.TButton", 
+            font=("SF Pro Display, Helvetica, Arial", 12),
+            background="#e5e5ea",
+            foreground=self.colors["text"],
+            borderwidth=0,
+            focusthickness=0,
+            padding=(16, 10)
+        )
+        self.style.map(
+            "Secondary.TButton",
+            background=[("active", "#d1d1d6"), ("pressed", "#c7c7cc")]
+        )
+        
+        # 按钮容器
+        self.button_frame = tk.Frame(self.main_frame, bg=self.colors["bg"])
+        self.button_frame.pack(fill=tk.X, pady=10)
+        
+        # 暂停/继续按钮
+        self.toggle_button = ttk.Button(
+            self.button_frame, 
+            text="暂停记录", 
+            command=self.toggle_recording,
+            style="Primary.TButton"
+        )
+        self.toggle_button.pack(fill=tk.X, pady=(0, 15))
+        
+        # 查看统计按钮
+        self.stats_button = ttk.Button(
+            self.button_frame, 
+            text="查看统计分析", 
+            command=self.show_stats,
+            style="Secondary.TButton"
+        )
+        self.stats_button.pack(fill=tk.X)
+        
+        # 版本信息
+        self.version_label = tk.Label(
+            self.main_frame, 
+            text="版本 1.0", 
+            font=("SF Pro Display, Helvetica, Arial", 10),
+            fg=self.colors["secondary_text"],
+            bg=self.colors["bg"]
+        )
+        self.version_label.pack(side=tk.BOTTOM, anchor="e", pady=(20, 0))
+        
+        # 定期更新UI
         self.update_ui()
+    
+    def create_custom_icon(self):
+        """创建自定义图标用于窗口标题栏"""
+        try:
+            # 创建临时图标文件
+            icon_size = 32
+            icon = tk.PhotoImage(width=icon_size, height=icon_size)
+            
+            # 填充透明背景
+            for y in range(icon_size):
+                for x in range(icon_size):
+                    icon.put("transparent", (x, y))
+            
+            # 计算圆的参数
+            center = icon_size // 2
+            radius = (icon_size // 2) - 2
+            color = "#0071e3"  # 蓝色
+            
+            # 绘制圆形图标
+            for y in range(icon_size):
+                for x in range(icon_size):
+                    # 计算到中心的距离
+                    distance = ((x - center) ** 2 + (y - center) ** 2) ** 0.5
+                    if distance <= radius:
+                        icon.put(color, (x, y))
+            
+            # 设置为窗口图标
+            self.root.iconphoto(True, icon)
+        except Exception as e:
+            print(f"创建图标时出错: {e}")
+            # 忽略错误，继续运行
     
     def toggle_recording(self):
         global is_recording
         is_recording = not is_recording
         
         if is_recording:
-            self.status_label.config(text="正在记录", foreground="green")
+            self.status_label.config(text="正在记录操作")
             self.toggle_button.config(text="暂停记录")
+            self.status_indicator.itemconfig(1, fill=self.colors["success"])
         else:
-            self.status_label.config(text="已暂停", foreground="red")
+            self.status_label.config(text="已暂停记录")
             self.toggle_button.config(text="继续记录")
+            self.status_indicator.itemconfig(1, fill=self.colors["warning"])
     
     def show_stats(self):
         # 确保数据已保存
-        save_data()
-        
-        # 启动Flask服务器
-        webbrowser.open("http://127.0.0.1:5000")
+        session.commit()
+        # 打开浏览器查看统计
+        webbrowser.open('http://127.0.0.1:5000/')
     
     def update_ui(self):
-        self.keystroke_count.config(text=f"今日操作: {len(keystroke_data['result'])}")
-        self.root.after(1000, self.update_ui)  # 每秒更新一次
+        # 更新UI（可以在这里添加实时统计等功能）
+        self.root.after(1000, self.update_ui)
 
-# 主函数
 def main():
-    # 检查今日数据文件是否存在，如果存在则载入
-    today_file = DATA_DIR / f"{TODAY}.json"
-    global keystroke_data
+    # 初始化变量
+    global last_move_time
+    last_move_time = None
     
-    if today_file.exists():
-        try:
-            with open(today_file, "r") as f:
-                loaded_data = json.load(f)
-                keystroke_data = loaded_data
-                
-                # 确保keystroke_data包含所有需要的键
-                if "first_activity_time" not in keystroke_data:
-                    keystroke_data["first_activity_time"] = None
-                if "last_activity_time" not in keystroke_data:
-                    keystroke_data["last_activity_time"] = None
-                
-                # 兼容旧数据格式，添加type字段
-                for item in keystroke_data["result"]:
-                    if "type" not in item:
-                        # 如果包含keyboard字段说明是老格式的键盘数据
-                        if "keyboard" in item:
-                            item["action"] = item["keyboard"]
-                            del item["keyboard"]
-                            item["type"] = "keyboard"
-        except (json.JSONDecodeError, FileNotFoundError):
-            # 如果文件损坏，使用新的数据结构
-            pass
+    # 迁移旧的JSON数据到SQLite (如果需要)
+    migrate_json_to_sqlite()
     
-    # 创建并启动键盘监听器
+    # 启动键盘和鼠标监听器
     keyboard_listener = keyboard.Listener(on_press=on_press)
     keyboard_listener.start()
     
-    # 创建并启动鼠标监听器
     mouse_listener = mouse.Listener(
         on_move=on_move,
         on_click=on_click,
@@ -477,26 +546,117 @@ def main():
     )
     mouse_listener.start()
     
-    # 创建并启动Flask服务器线程
-    def run_flask():
-        global app
-        app.run(port=5000, debug=False, use_reloader=False)
-    
-    flask_thread = threading.Thread(target=run_flask)
-    flask_thread.daemon = True
-    flask_thread.start()
-    
-    # 创建并运行GUI
+    # 创建GUI
     root = tk.Tk()
+    
+    # 配置GUI样式 - Apple Design风格
+    # 设置DPI感知以获得更清晰的界面
+    try:
+        from ctypes import windll
+        windll.shcore.SetProcessDpiAwareness(1)
+    except:
+        pass
+    
+    # 窗口圆角和阴影效果（仅适用于Windows 10/11）
+    try:
+        root.attributes('-alpha', 0.0)  # 先隐藏窗口
+        root.update()
+        hwnd = windll.user32.GetParent(root.winfo_id())
+        # 窗口样式：WS_EX_LAYERED | WS_EX_TRANSPARENT
+        style = windll.user32.GetWindowLongW(hwnd, -20)
+        windll.user32.SetWindowLongW(hwnd, -20, style | 0x00080000 | 0x00000020)
+        root.attributes('-alpha', 1.0)  # 显示窗口
+    except:
+        pass
+    
+    # 设置窗口对焦效果
+    root.focus_force()
+    
+    # 应用主题颜色
+    root.configure(background="#f5f5f7")
+    
+    # 创建应用实例
     app = KeyLoggerApp(root)
     
-    # 设置退出时的保存操作
-    def on_closing():
-        save_data()
-        root.destroy()
+    # 启动Flask服务器
+    server_thread = threading.Thread(target=run_flask)
+    server_thread.daemon = True
+    server_thread.start()
     
+    # 设置关闭窗口时的操作
     root.protocol("WM_DELETE_WINDOW", on_closing)
+    
+    # 启动GUI主循环
     root.mainloop()
+
+def migrate_json_to_sqlite():
+    """将旧的JSON数据迁移到SQLite数据库"""
+    try:
+        print("检查是否需要迁移JSON数据...")
+        json_files = list(DATA_DIR.glob("*.json"))
+        if not json_files:
+            print("没有找到JSON文件，无需迁移")
+            return
+        
+        print(f"找到{len(json_files)}个JSON文件，开始迁移数据...")
+        for json_file in json_files:
+            # 从文件名中提取日期
+            date = json_file.stem
+            
+            # 检查该日期的数据是否已存在
+            existing_count = session.query(KeystrokeEvent).filter_by(date=date).count()
+            if existing_count > 0:
+                print(f"日期 {date} 的数据已存在，跳过迁移")
+                continue
+            
+            print(f"迁移 {date} 的数据...")
+            try:
+                with open(json_file, "r") as f:
+                    data = json.load(f)
+                    
+                    # 检查数据格式
+                    if "date" in data and "result" in data:
+                        # 创建活动时间记录
+                        activity = ActivityTime(
+                            mac=data.get("mac", MAC_ADDRESS),
+                            date=data["date"],
+                            first_activity_time=data.get("first_activity_time"),
+                            last_activity_time=data.get("last_activity_time")
+                        )
+                        session.add(activity)
+                        
+                        # 添加事件记录
+                        for item in data["result"]:
+                            event = KeystrokeEvent(
+                                mac=data.get("mac", MAC_ADDRESS),
+                                date=data["date"],
+                                action=item.get("action", item.get("keyboard", "")),
+                                time=item.get("time", 0),
+                                type=item.get("type", "keyboard" if "keyboard" in item else "mouse")
+                            )
+                            session.add(event)
+                        
+                        # 每1000条提交一次
+                        session.commit()
+                        print(f"成功迁移 {date} 的 {len(data['result'])} 条记录")
+                    else:
+                        print(f"数据文件格式不正确: {json_file}")
+            except Exception as e:
+                print(f"迁移 {date} 数据时出错: {str(e)}")
+                session.rollback()
+        
+        print("数据迁移完成")
+    except Exception as e:
+        print(f"数据迁移过程中出错: {str(e)}")
+        session.rollback()
+
+def run_flask():
+    app.run(debug=False, threaded=True)
+
+def on_closing():
+    # 保存最后的数据
+    session.commit()
+    sys.exit(0)
 
 if __name__ == "__main__":
     main() 

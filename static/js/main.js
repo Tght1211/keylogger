@@ -18,6 +18,23 @@ const keyboardLayout = {
 
 // 初始化页面
 document.addEventListener('DOMContentLoaded', function() {
+    console.log('页面加载完成，开始初始化...');
+    
+    // 检查关键元素是否存在
+    const elements = {
+        'minute-activity-chart': document.getElementById('minute-activity-chart'),
+        'minute-chart-day-selector': document.getElementById('minute-chart-day-selector'),
+        'minute-chart-date-picker': document.getElementById('minute-chart-date-picker'),
+        'zoom-in': document.getElementById('zoom-in'),
+        'zoom-out': document.getElementById('zoom-out'),
+        'zoom-reset': document.getElementById('zoom-reset')
+    };
+    
+    // 输出每个元素的状态
+    Object.entries(elements).forEach(([id, element]) => {
+        console.log(`检查元素 ${id}: ${element ? '已找到' : '未找到'}`);
+    });
+    
     // 绑定时间选择器事件
     document.getElementById('today-btn').addEventListener('click', () => setTimeMode('today'));
     document.getElementById('week-btn').addEventListener('click', () => setTimeMode('week'));
@@ -28,6 +45,33 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('next-month').addEventListener('click', () => changeCalendarMonth(1));
     document.getElementById('active-hours-btn').addEventListener('click', () => setCalendarViewMode('active'));
     document.getElementById('total-hours-btn').addEventListener('click', () => setCalendarViewMode('total'));
+    
+    // 绑定分钟级活动图表的事件
+    const minuteChartDaySelector = document.getElementById('minute-chart-day-selector');
+    const minuteChartDatePicker = document.getElementById('minute-chart-date-picker');
+    const zoomInBtn = document.getElementById('zoom-in');
+    const zoomOutBtn = document.getElementById('zoom-out');
+    const zoomResetBtn = document.getElementById('zoom-reset');
+    
+    if (minuteChartDaySelector) {
+        minuteChartDaySelector.addEventListener('change', handleMinuteChartDayChange);
+    }
+    
+    if (minuteChartDatePicker) {
+        minuteChartDatePicker.addEventListener('change', updateMinuteActivityChart);
+    }
+    
+    if (zoomInBtn) {
+        zoomInBtn.addEventListener('click', () => zoomMinuteChart(1.5));
+    }
+    
+    if (zoomOutBtn) {
+        zoomOutBtn.addEventListener('click', () => zoomMinuteChart(0.75));
+    }
+    
+    if (zoomResetBtn) {
+        zoomResetBtn.addEventListener('click', resetMinuteChartZoom);
+    }
     
     // 更新当前月份显示
     updateCurrentMonthDisplay();
@@ -150,12 +194,39 @@ async function fetchData() {
         // 清除之前的错误消息
         clearErrorMessages();
         
-        // 更新统计和图表
+        // 更新统计和图表 - 按照当前时间模式
         updateStatistics(filteredData);
         updateHourlyChart(filteredData);
         updateKeyboardHeatmap(filteredData);
-        updateCalendarHeatmap();
         updateOperationDistributionChart();
+        
+        // 更新分钟级活动图表
+        updateMinuteActivityChart();
+        
+        // 重新获取所有数据用于日历展示 - 无论当前模式如何
+        let calendarApiUrl = '/api/keystroke_data';
+        const calendarResponse = await fetch(calendarApiUrl);
+        
+        if (!calendarResponse.ok) {
+            throw new Error(`日历数据API请求失败: ${calendarResponse.status}`);
+        }
+        
+        const calendarData = await calendarResponse.json();
+        console.log('日历API响应数据:', calendarData);
+        
+        // 更新日历热力图 - 使用完整的数据
+        if (Array.isArray(calendarData) && calendarData.length > 0) {
+            // 临时保存当前过滤后的数据
+            const tempData = keystrokeData;
+            // 使用完整数据更新日历
+            keystrokeData = calendarData;
+            // 更新日历
+            updateCalendarHeatmap();
+            // 恢复回过滤后的数据，以便其他功能正常工作
+            keystrokeData = tempData;
+        } else {
+            updateCalendarHeatmap();
+        }
     } catch (error) {
         console.error('获取数据失败:', error);
         showErrorMessage('获取数据失败: ' + error.message);
@@ -1462,6 +1533,329 @@ async function updateOperationDistributionChart() {
             chartContainer.innerHTML = `<div style="text-align: center; padding: 20px; color: #ff3b30;">
                 加载图表失败: ${error.message}
             </div>`;
+        }
+    }
+}
+
+// 处理分钟图表日期选择器变化
+function handleMinuteChartDayChange() {
+    const selector = document.getElementById('minute-chart-day-selector');
+    const datePicker = document.getElementById('minute-chart-date-picker');
+    
+    // 如果选择器或日期选择器不存在，退出函数
+    if (!selector || !datePicker) {
+        console.warn('未找到分钟图表日期选择器元素，跳过处理');
+        return;
+    }
+    
+    if (selector.value === 'custom') {
+        datePicker.style.display = 'inline-block';
+        // 设置日期选择器为今天
+        const today = new Date();
+        datePicker.value = formatDateForInput(today);
+    } else {
+        datePicker.style.display = 'none';
+    }
+    
+    updateMinuteActivityChart();
+}
+
+// 格式化日期为日期选择器输入格式 (YYYY-MM-DD)
+function formatDateForInput(date) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+}
+
+// 分钟图表的缩放状态
+let minuteChartZoom = {
+    xaxis: {
+        autorange: true
+    }
+};
+
+// 缩放分钟图表
+function zoomMinuteChart(factor) {
+    const chart = document.getElementById('minute-activity-chart');
+    const currentRange = minuteChartZoom.xaxis.range || chart._fullLayout.xaxis.range;
+    
+    if (!currentRange || currentRange.length !== 2) {
+        console.warn('无法获取当前视图范围，无法进行缩放');
+        return;
+    }
+    
+    const middle = (currentRange[0] + currentRange[1]) / 2;
+    const newSpan = (currentRange[1] - currentRange[0]) / factor;
+    const newRange = [middle - newSpan/2, middle + newSpan/2];
+    
+    minuteChartZoom.xaxis.range = newRange;
+    minuteChartZoom.xaxis.autorange = false;
+    
+    Plotly.relayout(chart, minuteChartZoom);
+}
+
+// 重置分钟图表缩放
+function resetMinuteChartZoom() {
+    minuteChartZoom = {
+        xaxis: {
+            autorange: true
+        }
+    };
+    
+    Plotly.relayout(document.getElementById('minute-activity-chart'), minuteChartZoom);
+}
+
+// 生成模拟分钟级数据（用于开发测试）
+function generateMockMinuteData() {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    const data = {};
+    
+    // 生成全天的数据，每分钟一个数据点
+    for (let i = 0; i < 24 * 60; i++) {
+        const time = new Date(today);
+        time.setMinutes(i);
+        
+        // 早上9点到12点，下午14点到18点工作时间增加数值
+        let count = 0;
+        const hour = Math.floor(i / 60);
+        
+        if ((hour >= 9 && hour < 12) || (hour >= 14 && hour < 18)) {
+            // 工作时间的基础活动
+            const baseActivity = Math.floor(Math.random() * 20) + 10;
+            
+            // 添加一些随机波动
+            const randomVariation = Math.sin(i / 30) * 5 + Math.random() * 10;
+            
+            // 为10:30和16:00左右创建活动高峰
+            const morningPeak = hour === 10 && i % 60 >= 15 && i % 60 <= 45 ? 20 : 0;
+            const afternoonPeak = hour === 16 && i % 60 >= 0 && i % 60 <= 30 ? 25 : 0;
+            
+            count = Math.max(0, Math.round(baseActivity + randomVariation + morningPeak + afternoonPeak));
+        } else if (hour >= 12 && hour < 14) {
+            // 午休时间，较低活动
+            count = Math.floor(Math.random() * 5);
+        } else {
+            // 非工作时间偶尔有少量活动
+            count = Math.random() > 0.8 ? Math.floor(Math.random() * 3) : 0;
+        }
+        
+        data[time.getTime()] = count;
+    }
+    
+    return {
+        result: {
+            minute_data: data
+        }
+    };
+}
+
+// 获取选定日期的分钟级数据
+async function getMinuteActivityData() {
+    try {
+        const selector = document.getElementById('minute-chart-day-selector');
+        const datePicker = document.getElementById('minute-chart-date-picker');
+        let targetDate = new Date();
+        
+        if (selector.value === 'yesterday') {
+            targetDate.setDate(targetDate.getDate() - 1);
+        } else if (selector.value === 'custom' && datePicker.value) {
+            targetDate = new Date(datePicker.value);
+        }
+        
+        // 将目标日期转换为 yyyy-MM-dd 格式
+        const dateStr = formatDateForInput(targetDate);
+        
+        // 从当前的 keystrokeData 中找到对应日期的数据
+        const dayData = keystrokeData.find(data => data.date === dateStr);
+        
+        if (!dayData || !dayData.result) {
+            console.warn('未找到所选日期的数据:', dateStr);
+            return null;
+        }
+        
+        // 按分钟聚合数据
+        const minuteData = {};
+        const startTime = new Date(dateStr);
+        startTime.setHours(0, 0, 0, 0);
+        
+        // 初始化每分钟的数据为0
+        for (let i = 0; i < 24 * 60; i++) {
+            const time = new Date(startTime);
+            time.setMinutes(i);
+            minuteData[time.getTime()] = 0;
+        }
+        
+        // 统计每分钟的按键次数
+        dayData.result.forEach(stroke => {
+            const time = new Date(stroke.time);
+            // 将时间规整到分钟
+            time.setSeconds(0, 0);
+            const timestamp = time.getTime();
+            minuteData[timestamp] = (minuteData[timestamp] || 0) + 1;
+        });
+        
+        return {
+            result: {
+                minute_data: minuteData
+            }
+        };
+    } catch (error) {
+        console.error('获取分钟级数据失败:', error);
+        return null;
+    }
+}
+
+// 更新分钟级活动图表
+async function updateMinuteActivityChart() {
+    try {
+        console.log('开始更新分钟级活动图表');
+        const chartContainer = document.getElementById('minute-activity-chart');
+        
+        // 如果图表容器不存在，就退出函数
+        if (!chartContainer) {
+            console.error('未找到分钟级活动图表容器 (id: minute-activity-chart)');
+            console.log('当前页面上的所有元素ID:', Array.from(document.querySelectorAll('[id]')).map(el => el.id));
+            return;
+        }
+        
+        // 显示加载中状态
+        chartContainer.innerHTML = '<div style="display: flex; justify-content: center; align-items: center; height: 300px;"><span>加载中...</span></div>';
+        
+        const data = await getMinuteActivityData();
+        console.log('获取到的分钟级数据:', data);
+        
+        if (!data || !data.result || !data.result.minute_data) {
+            console.error('无效的数据格式:', data);
+            chartContainer.innerHTML = '<div style="display: flex; justify-content: center; align-items: center; height: 300px;"><span>无数据</span></div>';
+            return;
+        }
+        
+        const minuteData = data.result.minute_data;
+        const timestamps = [];
+        const counts = [];
+        
+        // 根据API返回的数据结构进行处理
+        Object.keys(minuteData).sort().forEach(timestamp => {
+            // 转换时间戳为日期对象
+            const date = new Date(parseInt(timestamp));
+            timestamps.push(date);
+            counts.push(minuteData[timestamp]);
+        });
+        
+        console.log('处理后的数据点数:', timestamps.length);
+        console.log('第一个数据点:', { time: timestamps[0], count: counts[0] });
+        console.log('最后一个数据点:', { time: timestamps[timestamps.length - 1], count: counts[counts.length - 1] });
+        
+        // 如果没有数据，显示无数据信息
+        if (timestamps.length === 0) {
+            console.warn('没有有效的数据点');
+            chartContainer.innerHTML = '<div style="display: flex; justify-content: center; align-items: center; height: 300px;"><span>所选日期没有按键记录数据</span></div>';
+            return;
+        }
+        
+        // 创建Plotly图表
+        const trace = {
+            x: timestamps,
+            y: counts,
+            type: 'scatter',
+            mode: 'lines',
+            name: '每分钟操作次数',
+            line: {
+                color: 'rgba(0, 122, 255, 0.8)',
+                width: 2,
+                shape: 'spline',
+                smoothing: 0.5
+            },
+            fill: 'tozeroy',
+            fillcolor: 'rgba(0, 122, 255, 0.1)'
+        };
+        
+        // 创建小时刻度
+        const hourTicks = [];
+        const startOfDay = new Date(timestamps[0]);
+        startOfDay.setHours(0, 0, 0, 0);
+        
+        for (let i = 0; i <= 24; i++) {
+            const hourTime = new Date(startOfDay);
+            hourTime.setHours(i);
+            hourTicks.push(hourTime);
+        }
+        
+        const layout = {
+            title: '',
+            height: 350,
+            margin: {
+                l: 40,
+                r: 20,
+                t: 10,
+                b: 40
+            },
+            xaxis: {
+                type: 'date',
+                tickformat: '%H:%M',
+                tickvals: hourTicks,
+                ticktext: hourTicks.map(date => `${date.getHours()}:00`),
+                gridcolor: 'rgba(0, 0, 0, 0.05)',
+                gridwidth: 1,
+                title: {
+                    text: '时间 (小时)',
+                    font: {
+                        size: 12
+                    }
+                }
+            },
+            yaxis: {
+                title: {
+                    text: '操作次数',
+                    font: {
+                        size: 12
+                    }
+                },
+                gridcolor: 'rgba(0, 0, 0, 0.05)',
+                gridwidth: 1,
+                rangemode: 'nonnegative'
+            },
+            hovermode: 'closest',
+            paper_bgcolor: 'rgba(0,0,0,0)',
+            plot_bgcolor: 'rgba(0,0,0,0)',
+            hoverlabel: {
+                bgcolor: 'white',
+                font: {
+                    family: '-apple-system, BlinkMacSystemFont, "San Francisco", "Helvetica Neue", Helvetica, Arial, sans-serif',
+                    size: 12
+                },
+                bordercolor: 'rgba(0, 0, 0, 0.1)'
+            }
+        };
+        
+        const config = {
+            responsive: true,
+            displayModeBar: true,
+            modeBarButtonsToRemove: ['select2d', 'lasso2d', 'autoScale2d', 'toggleSpikelines'],
+            displaylogo: false
+        };
+        
+        console.log('开始绘制图表');
+        await Plotly.newPlot(chartContainer, [trace], layout, config);
+        console.log('图表绘制完成');
+        
+        // 应用之前的缩放状态（如果有）
+        if (!minuteChartZoom.xaxis.autorange) {
+            console.log('应用缩放状态:', minuteChartZoom);
+            await Plotly.relayout(chartContainer, minuteChartZoom);
+        }
+    } catch (error) {
+        console.error('更新分钟级活动图表时发生错误:', error);
+        const chartContainer = document.getElementById('minute-activity-chart');
+        if (chartContainer) {
+            chartContainer.innerHTML = `
+                <div style="display: flex; justify-content: center; align-items: center; height: 100%; color: #ff3b30;">
+                    <span>图表加载失败: ${error.message}</span>
+                </div>
+            `;
         }
     }
 } 

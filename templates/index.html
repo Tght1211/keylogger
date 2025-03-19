@@ -8,6 +8,9 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⌨️</text></svg>">
     
+    <!-- Plotly.js库 -->
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    
     <!-- Three.js库 -->
     <script src="https://cdn.jsdelivr.net/npm/three@0.132.2/build/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.132.2/examples/js/controls/OrbitControls.js"></script>
@@ -16,8 +19,7 @@
     <!-- Chart.js库 -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@3.7.1/dist/chart.min.js"></script>
     
-    <!-- Plotly.js库 -->
-    <script src="https://cdn.jsdelivr.net/npm/plotly.js@2.18.2/dist/plotly.min.js"></script>
+    <!-- Luxon库 -->
     <script src="https://cdn.jsdelivr.net/npm/luxon@3.0.3/build/global/luxon.min.js"></script>
 </head>
 <body>
@@ -86,7 +88,7 @@
                 <div class="calendar-header">
                     <div class="month-selector">
                         <button id="prev-month" class="month-nav">⟨</button>
-                        <span id="current-month">2023年03月</span>
+                        <span id="current-month">2025年03月</span>
                         <button id="next-month" class="month-nav">⟩</button>
                     </div>
                     <div class="view-toggle">
@@ -96,10 +98,31 @@
                 </div>
                 <div id="calendar-heatmap"></div>
             </section>
+            
+            <section class="chart-card minute-activity">
+                <h3>分钟级活动曲线</h3>
+                <div class="chart-controls">
+                    <select id="minute-chart-day-selector">
+                        <option value="today">今天</option>
+                        <option value="yesterday">昨天</option>
+                        <option value="custom">自定义日期</option>
+                    </select>
+                    <input type="date" id="minute-chart-date-picker" style="display: none;">
+                    <div class="zoom-controls">
+                        <button id="zoom-in" title="放大">+</button>
+                        <button id="zoom-out" title="缩小">-</button>
+                        <button id="zoom-reset" title="重置">↺</button>
+                    </div>
+                </div>
+                <div id="minute-activity-chart"></div>
+                <div class="chart-info">
+                    <small>每分钟操作活动的曲线图，显示工作强度变化</small>
+                </div>
+            </section>
         </main>
         
         <footer>
-            <p>© 2023 工作留痕 - 工作效率分析工具</p>
+            <p>© 2025 工作留痕 - 工作效率分析工具</p>
         </footer>
     </div>
     
