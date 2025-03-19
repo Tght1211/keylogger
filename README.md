@@ -13,7 +13,8 @@
 - 🔄 实时更新数据和统计信息
 
 > 效果图如下
-![Uploading image.png…]()
+
+![image](https://github.com/user-attachments/assets/cc07fbc1-c3a3-4cc1-b228-2b98300a4a12)
 
 
 ## 技术实现
