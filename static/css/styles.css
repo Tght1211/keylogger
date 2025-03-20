@@ -728,8 +728,8 @@ main {
     overflow: hidden;
     border-right: 1px solid var(--gray-5);
     border-bottom: 1px solid var(--gray-5);
-    min-height: 40px;
-    max-height: 45px;
+    min-height: 60px;
+    max-height: 65px;
     background-color: white;
     transition: background-color 0.2s ease;
 }
@@ -752,7 +752,7 @@ main {
 }
 
 .calendar-day-number {
-    font-size: 12px;
+    font-size: 16px;
     font-weight: 400;
     margin-bottom: 1px;
     position: relative;
@@ -767,7 +767,7 @@ main {
 }
 
 .calendar-stats {
-    font-size: 9px;
+    font-size: 12px;
     width: 100%;
     text-align: center;
     font-weight: 500;
@@ -787,7 +787,7 @@ main {
 }
 
 .legend-title {
-    font-size: 11px;
+    font-size: 14px;
     font-weight: 500;
     color: var(--gray-1);
     margin-right: 2px;
@@ -807,7 +807,7 @@ main {
 }
 
 .legend-label {
-    font-size: 9px;
+    font-size: 12px;
     color: var(--gray-1);
 }
 

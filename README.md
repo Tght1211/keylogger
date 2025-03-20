@@ -35,7 +35,7 @@
 cd keylogger
 conda create -n keylogger python=3.10
 conda activate keylogger
-pip install -r requirements.txt
+pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
 ```
 
 ## 使用方法
