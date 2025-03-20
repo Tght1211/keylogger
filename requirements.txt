@@ -6,3 +6,6 @@ plotly==5.15.0
 pandas==2.0.3
 uuid==1.30
 sqlalchemy==2.0.27
+pystray==0.19.5
+Pillow==10.2.0
+pywin32==306

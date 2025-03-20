@@ -12,8 +12,8 @@ const keyboardLayout = {
     row2: ['`', '1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '=', 'Backspace'],
     row3: ['Tab', 'q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p', '[', ']', '\\'],
     row4: ['Caps', 'a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l', ';', '\'', 'Enter'],
-    row5: ['Shift', 'z', 'x', 'c', 'v', 'b', 'n', 'm', ',', '.', '/', 'Shift'],
-    row6: ['Ctrl', 'Win', 'Alt', 'Space', 'Alt', 'Menu', 'Ctrl']
+    row5: ['Shift', 'z', 'x', 'c', 'v', 'b', 'n', 'm', ',', '.', '/', 'Shift_r'],
+    row6: ['Ctrl', 'Win', 'Alt', 'Space', 'Alt_r', 'Menu', 'Ctrl_r']
 };
 
 // 初始化页面
@@ -897,11 +897,13 @@ function createKeyboardHeatmap(keyCounts) {
                 keyDiv.classList.add('enter-key');
             } else if (key === 'Shift') {
                 keyDiv.classList.add('shift-key');
+            } else if (key === 'Shift_r') {
+                keyDiv.classList.add('shift-key');
             } else if (key === 'Tab') {
                 keyDiv.classList.add('tab-key');
             } else if (key === 'Caps') {
                 keyDiv.classList.add('caps-key');
-            } else if (key === 'Ctrl' || key === 'Alt' || key === 'Win' || key === 'Menu') {
+            } else if (key === 'Ctrl' || key === 'Ctrl_r' || key === 'Alt' || key === 'Alt_r' || key === 'Win' || key === 'Menu') {
                 keyDiv.classList.add('mod-key');
             }
             
