@@ -15,11 +15,12 @@ import sqlite3
 from sqlalchemy import create_engine, Column, Integer, String, Text, inspect
 from sqlalchemy.orm import declarative_base, sessionmaker
 import pystray
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageTk, ImageColor
 import winreg
 import win32gui
 import win32con
 import argparse
+import io
 
 # 全局变量
 DATA_DIR = Path(__file__).parent / "data"
@@ -37,6 +38,18 @@ def create_round_icon(width, height, color):
     dc = ImageDraw.Draw(image)
     dc.ellipse([0, 0, width-1, height-1], fill=color)
     return image
+
+def load_icon_image():
+    """
+    加载系统托盘图标图像，必须使用秒表.png文件
+    """
+    # 尝试加载秒表图标
+    icon_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static', 'img', '秒表.png')
+    if os.path.exists(icon_path):
+        print(f"加载秒表图标: {icon_path}")
+        return Image.open(icon_path)
+    else:
+        raise FileNotFoundError(f"找不到秒表图标文件: {icon_path}，请确保该文件存在")
 
 def add_to_startup():
     # 添加到开机自启
@@ -441,16 +454,17 @@ def get_operation_distribution():
 class KeyLoggerApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("键盘记录器")
-        self.root.geometry("360x480")
+        self.root.title("操作记录器")
+        self.root.geometry("280x220")  # 更小的窗口尺寸
+        self.root.resizable(False, False)  # 禁止调整窗口大小
         
         # 设置窗口样式
         self.root.configure(bg='#ffffff')
         
         # 设置字体
-        self.default_font = ('SF Pro Display', 13)
-        self.title_font = ('SF Pro Display', 20, 'bold')
-        self.button_font = ('SF Pro Display', 13)
+        self.default_font = ('微软雅黑', 9)
+        self.title_font = ('微软雅黑', 14, 'bold')
+        self.button_font = ('微软雅黑', 9)
         
         # 创建系统托盘图标
         self.create_tray_icon()
@@ -460,7 +474,7 @@ class KeyLoggerApp:
         
         # 创建主框架
         main_frame = ttk.Frame(root)
-        main_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
+        main_frame.pack(fill=tk.BOTH, expand=True, padx=12, pady=12)
         
         # 添加控件
         self.create_widgets(main_frame)
@@ -483,14 +497,14 @@ class KeyLoggerApp:
             font=self.title_font,
             foreground='#000000',
             background='#ffffff',
-            padding=(0, 10)
+            padding=(0, 3)
         )
         
         style.configure('Status.TLabel',
             font=self.default_font,
             foreground='#666666',
             background='#ffffff',
-            padding=(0, 5)
+            padding=(0, 2)
         )
         
         # 配置按钮样式
@@ -498,7 +512,7 @@ class KeyLoggerApp:
             font=self.button_font,
             background='#007AFF',
             foreground='#FFFFFF',
-            padding=(20, 10),
+            padding=(8, 6),
             borderwidth=0
         )
         
@@ -511,7 +525,7 @@ class KeyLoggerApp:
             font=self.button_font,
             background='#F5F5F7',
             foreground='#000000',
-            padding=(20, 10),
+            padding=(8, 6),
             borderwidth=0
         )
         
@@ -531,10 +545,10 @@ class KeyLoggerApp:
         # 标题
         title_label = ttk.Label(
             frame,
-            text="键盘记录器",
+            text="操作记录器",
             style='Title.TLabel'
         )
-        title_label.pack(fill=tk.X, pady=(0, 20))
+        title_label.pack(fill=tk.X, pady=(0, 8))
         
         # 状态标签
         self.status_label = ttk.Label(
@@ -542,38 +556,38 @@ class KeyLoggerApp:
             text="状态：正在记录",
             style='Status.TLabel'
         )
-        self.status_label.pack(fill=tk.X, pady=(0, 30))
+        self.status_label.pack(fill=tk.X, pady=(0, 10))
         
-        # 按钮容器
-        button_frame = ttk.Frame(frame)
-        button_frame.pack(fill=tk.X, pady=(0, 20))
-        
-        # 开始/停止按钮
+        # 主按钮 - 开始/停止记录
         self.toggle_button = ttk.Button(
-            button_frame,
+            frame,
             text="停止记录",
             command=self.toggle_recording,
             style='Primary.TButton'
         )
-        self.toggle_button.pack(fill=tk.X, pady=(0, 10))
+        self.toggle_button.pack(fill=tk.X, pady=(0, 8))
         
-        # 查看统计按钮
+        # 创建两列按钮布局
+        buttons_frame = ttk.Frame(frame)
+        buttons_frame.pack(fill=tk.X, pady=(0, 8))
+        
+        # 左侧按钮 - 查看统计
         self.stats_button = ttk.Button(
-            button_frame,
+            buttons_frame,
             text="查看统计",
             command=self.show_stats,
             style='Secondary.TButton'
         )
-        self.stats_button.pack(fill=tk.X, pady=(0, 10))
+        self.stats_button.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 4))
         
-        # 最小化到托盘按钮
+        # 右侧按钮 - 最小化到托盘
         self.minimize_button = ttk.Button(
-            button_frame,
+            buttons_frame,
             text="最小化到托盘",
             command=self.minimize_to_tray,
             style='Secondary.TButton'
         )
-        self.minimize_button.pack(fill=tk.X, pady=(0, 20))
+        self.minimize_button.pack(side=tk.RIGHT, fill=tk.X, expand=True, padx=(4, 0))
         
         # 开机自启动复选框
         self.startup_var = tk.BooleanVar(value=is_in_startup())
@@ -588,7 +602,8 @@ class KeyLoggerApp:
     
     def create_tray_icon(self):
         # 创建系统托盘图标
-        image = create_round_icon(64, 64, 'green' if is_recording else 'red')
+        image = load_icon_image()
+        
         menu = (
             pystray.MenuItem("显示主窗口", self.show_window),
             pystray.MenuItem("开始记录", self.start_recording, checked=lambda item: is_recording),
@@ -596,7 +611,7 @@ class KeyLoggerApp:
             pystray.MenuItem("查看统计", self.show_stats),
             pystray.MenuItem("退出", self.quit_app)
         )
-        self.icon = pystray.Icon("keylogger", image, "键盘记录器", menu)
+        self.icon = pystray.Icon("keylogger", image, "操作记录器", menu)
         
     def show_window(self, icon=None, item=None):
         self.icon.stop()
@@ -613,14 +628,14 @@ class KeyLoggerApp:
         is_recording = True
         self.recording_var.set(True)
         self.update_ui()
-        self.icon.icon = create_round_icon(64, 64, 'green')
+        self.icon.icon = load_icon_image()
     
     def stop_recording(self, icon=None, item=None):
         global is_recording
         is_recording = False
         self.recording_var.set(False)
         self.update_ui()
-        self.icon.icon = create_round_icon(64, 64, 'red')
+        self.icon.icon = load_icon_image()
     
     def toggle_startup(self):
         if self.startup_var.get():
@@ -682,14 +697,15 @@ def main():
     mouse_listener.start()
     
     # 解析命令行参数
-    parser = argparse.ArgumentParser(description='键盘记录器')
+    parser = argparse.ArgumentParser(description='工作留痕')
     parser.add_argument('--minimized', action='store_true', help='以最小化状态启动')
     parser.add_argument('--background', action='store_true', help='在后台运行（无界面）')
     args = parser.parse_args()
     
     if args.background:
         # 创建系统托盘图标
-        image = create_round_icon(64, 64, 'green')
+        image = load_icon_image()
+        
         menu = (
             pystray.MenuItem("显示主窗口", lambda: start_gui(True)),
             pystray.MenuItem("开始记录", lambda: set_recording(True)),
@@ -697,7 +713,7 @@ def main():
             pystray.MenuItem("查看统计", lambda: webbrowser.open('http://127.0.0.1:5000/')),
             pystray.MenuItem("退出", lambda: sys.exit(0))
         )
-        icon = pystray.Icon("keylogger", image, "键盘记录器", menu)
+        icon = pystray.Icon("keylogger", image, "操作记录器", menu)
         icon.run()
     else:
         # 创建主窗口
@@ -794,9 +810,20 @@ def on_closing():
 
 if __name__ == "__main__":
     try:
+        # 检查图标文件是否存在
+        icon_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static', 'img', '秒表.png')
+        if not os.path.exists(icon_path):
+            print(f"错误: 找不到秒表图标文件: {icon_path}")
+            print("请确保秒表.png文件存在于static/img目录下")
+            sys.exit(1)
+            
         main()
     except KeyboardInterrupt:
         print("\n程序已退出")
+    except FileNotFoundError as e:
+        print(f"错误: {e}")
+        print("请确保秒表.png文件存在于static/img目录下")
+        sys.exit(1)
     except Exception as e:
         print(f"发生错误: {e}")
         sys.exit(1) 

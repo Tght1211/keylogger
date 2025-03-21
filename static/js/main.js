@@ -46,6 +46,9 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('active-hours-btn').addEventListener('click', () => setCalendarViewMode('active'));
     document.getElementById('total-hours-btn').addEventListener('click', () => setCalendarViewMode('total'));
     
+    // 初始化当前月份显示
+    updateCurrentMonthDisplay();
+    
     // 绑定分钟级活动图表的事件
     const minuteChartDaySelector = document.getElementById('minute-chart-day-selector');
     const minuteChartDatePicker = document.getElementById('minute-chart-date-picker');
@@ -73,11 +76,11 @@ document.addEventListener('DOMContentLoaded', function() {
         zoomResetBtn.addEventListener('click', resetMinuteChartZoom);
     }
     
-    // 更新当前月份显示
-    updateCurrentMonthDisplay();
-    
-    // 初始加载数据
+    // 获取数据
     fetchData();
+    
+    // 确保日历正确显示历史数据
+    fetchCalendarData();
 });
 
 // 设置时间模式
@@ -103,15 +106,17 @@ function setCalendarViewMode(mode) {
     const buttonId = mode === 'active' ? 'active-hours-btn' : 'total-hours-btn';
     document.getElementById(buttonId).classList.add('active');
     
-    // 重新渲染日历
-    updateCalendarHeatmap();
+    // 获取完整数据并重新渲染日历
+    fetchCalendarData();
 }
 
 // 改变日历月份
 function changeCalendarMonth(change) {
     calendarDisplayDate = calendarDisplayDate.plus({ months: change });
     updateCurrentMonthDisplay();
-    updateCalendarHeatmap();
+    
+    // 获取完整数据并重新渲染日历
+    fetchCalendarData();
 }
 
 // 更新当前月份显示
@@ -203,30 +208,8 @@ async function fetchData() {
         // 更新分钟级活动图表
         updateMinuteActivityChart();
         
-        // 重新获取所有数据用于日历展示 - 无论当前模式如何
-        let calendarApiUrl = '/api/keystroke_data';
-        const calendarResponse = await fetch(calendarApiUrl);
-        
-        if (!calendarResponse.ok) {
-            throw new Error(`日历数据API请求失败: ${calendarResponse.status}`);
-        }
-        
-        const calendarData = await calendarResponse.json();
-        console.log('日历API响应数据:', calendarData);
-        
-        // 更新日历热力图 - 使用完整的数据
-        if (Array.isArray(calendarData) && calendarData.length > 0) {
-            // 临时保存当前过滤后的数据
-            const tempData = keystrokeData;
-            // 使用完整数据更新日历
-            keystrokeData = calendarData;
-            // 更新日历
-            updateCalendarHeatmap();
-            // 恢复回过滤后的数据，以便其他功能正常工作
-            keystrokeData = tempData;
-        } else {
-            updateCalendarHeatmap();
-        }
+        // 使用独立的函数获取和更新日历数据
+        fetchCalendarData();
     } catch (error) {
         console.error('获取数据失败:', error);
         showErrorMessage('获取数据失败: ' + error.message);
@@ -925,7 +908,14 @@ function createKeyboardHeatmap(keyCounts) {
             
             const keyName = document.createElement('span');
             keyName.className = 'key-name';
-            keyName.textContent = key;
+            
+            // 修改显示名称，保持数据区分但统一显示
+            let displayKey = key;
+            if (key === 'Shift_r') displayKey = 'Shift';
+            if (key === 'Ctrl_r') displayKey = 'Ctrl';
+            if (key === 'Alt_r') displayKey = 'Alt';
+            
+            keyName.textContent = displayKey;
             keyContainer.appendChild(keyName);
             
             // 添加点击次数显示 (如果大于0)
@@ -939,7 +929,7 @@ function createKeyboardHeatmap(keyCounts) {
             keyDiv.appendChild(keyContainer);
             
             // 添加点击次数提示
-            keyDiv.title = `${key}: ${count} 次`;
+            keyDiv.title = `${displayKey}: ${count} 次`;
             
             // 将键添加到行中
             rowDiv.appendChild(keyDiv);
@@ -1296,18 +1286,18 @@ function updateCalendarHeatmap() {
         const firstDayOfMonth = calendarDisplayDate.startOf('month');
         const lastDayOfMonth = calendarDisplayDate.endOf('month');
         
-        // 计算最大工作时长，用于颜色强度
+        // 计算当前视图模式下的最大工作时长，用于颜色强度
         let maxHours = 0;
         Object.values(calendarData).forEach(data => {
-            if (calendarViewMode === 'active') {
-                maxHours = Math.max(maxHours, data.activeHours);
-            } else {
-                maxHours = Math.max(maxHours, data.totalHours);
+            const hours = calendarViewMode === 'active' ? data.activeHours : data.totalHours;
+            if (hours > maxHours) {
+                maxHours = hours;
             }
         });
         
         // 确保最大值至少为8小时，防止颜色太浅
         maxHours = Math.max(maxHours, 8);
+        console.log(`日历最大时长 (${calendarViewMode}模式): ${maxHours}小时`);
         
         // 创建星期标题行
         const weekdayNames = ['日', '一', '二', '三', '四', '五', '六'];
@@ -1351,12 +1341,7 @@ function updateCalendarHeatmap() {
             dayCell.appendChild(dayNumber);
             
             // 工作时长数据
-            const hasData = calendarData[dateStr] && (
-                calendarData[dateStr].activeHours > 0 || 
-                calendarData[dateStr].totalHours > 0
-            );
-            
-            if (hasData) {
+            if (calendarData[dateStr]) {
                 // 根据视图模式选择要显示的时长
                 const displayHours = calendarViewMode === 'active' 
                     ? calendarData[dateStr].activeHours 
@@ -1369,10 +1354,8 @@ function updateCalendarHeatmap() {
                 if (displayHours >= 0.1) {
                     dayCell.style.backgroundColor = `rgba(0, 122, 255, ${intensity.toFixed(2)})`;
                     dayCell.style.color = intensity > 0.5 ? 'white' : 'var(--dark-color)';
-                }
-                
-                // 添加工作时长统计（如果超过0.1小时才显示）
-                if (displayHours >= 0.1) {
+                    
+                    // 添加工作时长统计
                     const statsContainer = document.createElement('div');
                     statsContainer.className = 'calendar-stats';
                     statsContainer.textContent = `${displayHours.toFixed(1)}h`;
@@ -1392,7 +1375,7 @@ function updateCalendarHeatmap() {
         
         const legendTitle = document.createElement('span');
         legendTitle.className = 'legend-title';
-        legendTitle.textContent = calendarViewMode === 'active' ? '有效工作时长:' : '总工作时长:';
+        legendTitle.textContent = calendarViewMode === 'active' ? '有效操作时长:' : '总工作时长:';
         legend.appendChild(legendTitle);
         
         // 创建图例项
@@ -1724,7 +1707,7 @@ async function updateMinuteActivityChart() {
         }
         
         // 显示加载中状态
-        chartContainer.innerHTML = '<div style="display: flex; justify-content: center; align-items: center; height: 300px;"><span>加载中...</span></div>';
+        // chartContainer.innerHTML = '<div style="display: flex; justify-content: center; align-items: center; height: 300px;"><span>加载中...</span></div>';
         
         const data = await getMinuteActivityData();
         console.log('获取到的分钟级数据:', data);
@@ -1858,6 +1841,42 @@ async function updateMinuteActivityChart() {
                     <span>图表加载失败: ${error.message}</span>
                 </div>
             `;
+        }
+    }
+}
+
+// 获取日历数据并更新日历热力图
+async function fetchCalendarData() {
+    try {
+        // 获取完整的历史数据用于日历展示
+        const calendarApiUrl = '/api/keystroke_data';
+        const calendarResponse = await fetch(calendarApiUrl);
+        
+        if (!calendarResponse.ok) {
+            throw new Error(`日历数据API请求失败: ${calendarResponse.status}`);
+        }
+        
+        const calendarData = await calendarResponse.json();
+        console.log('日历API响应数据:', calendarData);
+        
+        // 更新日历热力图 - 使用完整的数据
+        if (Array.isArray(calendarData) && calendarData.length > 0) {
+            // 临时保存当前keystrokeData
+            const tempData = keystrokeData;
+            // 使用完整数据更新日历
+            keystrokeData = calendarData;
+            // 更新日历
+            updateCalendarHeatmap();
+            // 恢复原始数据
+            keystrokeData = tempData;
+        } else {
+            updateCalendarHeatmap();
+        }
+    } catch (error) {
+        console.error('获取日历数据失败:', error);
+        const calendarContainer = document.getElementById('calendar-heatmap');
+        if (calendarContainer) {
+            calendarContainer.innerHTML = '<div style="text-align: center; padding: 20px; color: #8e8e93; font-size: 13px;">加载失败</div>';
         }
     }
 } 
