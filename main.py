@@ -356,7 +356,7 @@ def on_click(x, y, button, pressed):
         return
     
     # 获取当前时间戳
-    timestamp = int(datetime.datetime.now().timestamp() * 1000)
+    timestamp = int(datetime.now().timestamp() * 1000)
     
     # 识别按键
     if button == mouse.Button.left:
@@ -377,7 +377,7 @@ def on_scroll(x, y, dx, dy):
         return
     
     # 获取当前时间戳
-    timestamp = int(datetime.datetime.now().timestamp() * 1000)
+    timestamp = int(datetime.now().timestamp() * 1000)
     
     # 保存鼠标滚轮事件
     save_event("roller", "mouse", timestamp)
