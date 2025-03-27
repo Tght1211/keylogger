@@ -6,7 +6,7 @@
     <title>工作留痕 - 统计面板</title>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⌨️</text></svg>">
+    <link rel="icon" href="{{ url_for('static', filename='img/工作留痕.png') }}">
     
     <!-- Plotly.js库 -->
     <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
@@ -26,15 +26,14 @@
     <div class="container">
         <header>
             <div class="logo">
-                <svg viewBox="0 0 24 24" width="24" height="24">
-                    <path d="M19 6h-4V2H9v4H5l7 7 7-7zm-8 13v-2h2v2h-2z" fill="currentColor"/>
-                </svg>
+                <img src="/static/img/工作留痕.png" width="24" height="24" alt="工作留痕">
                 <h1>工作留痕</h1>
             </div>
             <div class="time-selector">
                 <button id="today-btn" class="active">今日</button>
                 <button id="week-btn">本周</button>
                 <button id="month-btn">本月</button>
+                <input type="date" id="date-picker" class="date-picker">
             </div>
         </header>
         
@@ -122,7 +121,7 @@
         </main>
         
         <footer>
-            <p>© 2025 工作留痕 - 工作效率分析工具</p>
+            <p>© 2025 工作留痕 - 工作效率分析工具 | <a href="https://github.com/Tght1211/keylogger" target="_blank" class="github-link">GitHub <img src="/static/img/github-mark.svg" alt="GitHub" width="16" height="16"></a></p>
         </footer>
     </div>
     

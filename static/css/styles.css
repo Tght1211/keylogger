@@ -70,27 +70,41 @@ header {
 
 .time-selector {
     display: flex;
-    background-color: var(--gray-5);
-    border-radius: 20px;
-    padding: 2px;
+    gap: 10px;
+    align-items: center;
 }
 
 .time-selector button {
-    background: none;
-    border: none;
     padding: 8px 16px;
-    border-radius: 18px;
-    font-size: 14px;
-    font-weight: 500;
-    color: var(--gray-1);
+    border: 1px solid #e0e0e0;
+    border-radius: 20px;
+    background: white;
+    color: #666;
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: all 0.3s ease;
 }
 
 .time-selector button.active {
-    background-color: white;
-    color: var(--dark-color);
-    box-shadow: var(--shadow-sm);
+    background: #007AFF;
+    color: white;
+    border-color: #007AFF;
+}
+
+.time-selector .date-picker {
+    padding: 8px 16px;
+    border: 1px solid #e0e0e0;
+    border-radius: 20px;
+    background: white;
+    color: #666;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 14px;
+}
+
+.time-selector .date-picker:focus {
+    outline: none;
+    border-color: #007AFF;
+    box-shadow: 0 0 0 2px rgba(0,122,255,0.1);
 }
 
 /* 主内容区域 */
@@ -747,7 +761,8 @@ main {
 }
 
 .calendar-day.today .calendar-day-number {
-    color: var(--primary-color);
+    /* color: var(--primary-color); */
+    color: #ff1818;
     font-weight: 600;
 }
 
@@ -813,12 +828,11 @@ main {
 
 /* 页脚 */
 footer {
-    margin-top: 40px;
-    padding-top: 20px;
-    border-top: 1px solid var(--gray-5);
-    color: var(--gray-2);
-    font-size: 14px;
+    margin-top: 2rem;
+    padding: 1rem 0;
     text-align: center;
+    font-size: 0.9rem;
+    color: #666;
 }
 
 /* 响应式设计 */
@@ -951,4 +965,23 @@ footer {
     text-align: center;
     color: var(--gray-1);
     font-size: 12px;
+}
+
+/* GitHub链接样式 */
+.github-link {
+    display: inline-flex;
+    align-items: center;
+    text-decoration: none;
+    color: #555;
+    font-weight: 500;
+    transition: color 0.2s ease;
+}
+
+.github-link:hover {
+    color: #24292f;
+}
+
+.github-link img {
+    margin-left: 4px;
+    vertical-align: middle;
 } 

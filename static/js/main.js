@@ -1,10 +1,13 @@
 // 全局变量和配置
 const DateTime = luxon.DateTime;
-let currentMode = 'today'; // 'today', 'week', 'month'
+let currentMode = 'today'; // 'today', 'week', 'month', 'custom'
 let keystrokeData = [];
 let activeDate = DateTime.now();
 let calendarDisplayDate = DateTime.now(); // 当前显示的日历月份
 let calendarViewMode = 'total'; // 'active' 或 'total' 工作时长视图
+
+// 定义操作超时时间（5分钟，单位：毫秒）
+const ACTIVITY_TIMEOUT = 5 * 60 * 1000;
 
 // 键盘布局定义（标准QWERTY键盘）
 const keyboardLayout = {
@@ -27,7 +30,8 @@ document.addEventListener('DOMContentLoaded', function() {
         'minute-chart-date-picker': document.getElementById('minute-chart-date-picker'),
         'zoom-in': document.getElementById('zoom-in'),
         'zoom-out': document.getElementById('zoom-out'),
-        'zoom-reset': document.getElementById('zoom-reset')
+        'zoom-reset': document.getElementById('zoom-reset'),
+        'date-picker': document.getElementById('date-picker')
     };
     
     // 输出每个元素的状态
@@ -39,6 +43,32 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('today-btn').addEventListener('click', () => setTimeMode('today'));
     document.getElementById('week-btn').addEventListener('click', () => setTimeMode('week'));
     document.getElementById('month-btn').addEventListener('click', () => setTimeMode('month'));
+    
+    // 初始化日期选择器
+    const datePicker = document.getElementById('date-picker');
+    if (datePicker) {
+        // 设置默认值为今天
+        datePicker.valueAsDate = new Date();
+        
+        // 监听日期变化
+        datePicker.addEventListener('change', function(e) {
+            const selectedDate = DateTime.fromISO(e.target.value);
+            activeDate = selectedDate;
+            setTimeMode('custom');
+            
+            // 同步分钟级活动曲线的日期
+            const minuteChartDaySelector = document.getElementById('minute-chart-day-selector');
+            const minuteChartDatePicker = document.getElementById('minute-chart-date-picker');
+            if (minuteChartDaySelector && minuteChartDatePicker) {
+                minuteChartDaySelector.value = 'custom';
+                minuteChartDatePicker.style.display = 'inline-block';
+                minuteChartDatePicker.value = selectedDate.toFormat('yyyy-MM-dd');
+                updateMinuteActivityChart(); // 更新分钟级活动曲线
+            }
+            
+            fetchData();
+        });
+    }
     
     // 绑定日历控制事件
     document.getElementById('prev-month').addEventListener('click', () => changeCalendarMonth(-1));
@@ -89,7 +119,38 @@ function setTimeMode(mode) {
     
     // 更新按钮状态
     document.querySelectorAll('.time-selector button').forEach(btn => btn.classList.remove('active'));
-    document.getElementById(`${mode}-btn`).classList.add('active');
+    
+    if (mode !== 'custom') {
+        document.getElementById(`${mode}-btn`).classList.add('active');
+    }
+    
+    // 如果切换到今日模式，更新日期选择器
+    if (mode === 'today') {
+        const datePicker = document.getElementById('date-picker');
+        if (datePicker) {
+            datePicker.valueAsDate = new Date();
+        }
+        activeDate = DateTime.now();
+        
+        // 同步分钟级活动曲线的日期选择
+        const minuteChartDaySelector = document.getElementById('minute-chart-day-selector');
+        const minuteChartDatePicker = document.getElementById('minute-chart-date-picker');
+        if (minuteChartDaySelector) {
+            minuteChartDaySelector.value = 'today';
+            if (minuteChartDatePicker) {
+                minuteChartDatePicker.style.display = 'none';
+            }
+        }
+    } else if (mode === 'custom') {
+        // 同步分钟级活动曲线的日期选择
+        const minuteChartDaySelector = document.getElementById('minute-chart-day-selector');
+        const minuteChartDatePicker = document.getElementById('minute-chart-date-picker');
+        if (minuteChartDaySelector && minuteChartDatePicker) {
+            minuteChartDaySelector.value = 'custom';
+            minuteChartDatePicker.style.display = 'inline-block';
+            minuteChartDatePicker.value = activeDate.toFormat('yyyy-MM-dd');
+        }
+    }
     
     console.log(`切换到${mode}模式，正在重新加载数据...`);
     
@@ -128,14 +189,20 @@ function updateCurrentMonthDisplay() {
 async function fetchData() {
     try {
         let apiUrl = '/api/keystroke_data';
+        let queryParams = '';
         
-        if (currentMode === 'today') {
-            // 如果是今日模式，直接使用today_data接口
+        if (currentMode === 'today' || currentMode === 'custom') {
+            // 如果是今日模式或自定义日期模式，使用today_data接口
             apiUrl = '/api/today_data';
+            if (currentMode === 'custom') {
+                // 如果是自定义日期模式，添加日期参数
+                const dateStr = activeDate.toFormat('yyyy-MM-dd');
+                queryParams = `?date=${dateStr}`;
+            }
         }
         
-        console.log('正在请求数据:', apiUrl);
-        const response = await fetch(apiUrl);
+        console.log('正在请求数据:', apiUrl + queryParams);
+        const response = await fetch(apiUrl + queryParams);
         
         if (!response.ok) {
             throw new Error(`API请求失败: ${response.status}`);
@@ -152,31 +219,25 @@ async function fetchData() {
         }
         
         // 处理数据格式
-        if (currentMode === 'today' && !Array.isArray(data)) {
-            // 检查数据格式是否有效
+        if ((currentMode === 'today' || currentMode === 'custom') && !Array.isArray(data)) {
+            // 如果是today_data或custom模式的响应，它返回的是单个对象
             if (!data.result) {
-                console.error('今日数据格式无效:', data);
-                showErrorMessage('今日数据格式无效');
+                console.error('数据格式无效:', data);
+                showErrorMessage('数据格式无效');
                 return;
             }
             
-            // 如果获取的是today_data，它返回的是单个对象，我们需要将其转换为数组
+            // 将单个对象转换为数组
             keystrokeData = [data];
         } else if (Array.isArray(data)) {
-            // 检查数据数组是否为空
-            if (data.length === 0) {
-                console.warn('API返回空数据数组');
-                keystrokeData = [];
-            } else {
-                // 检查数组中的数据是否有效
-                const validData = data.filter(item => item && item.result);
-                if (validData.length === 0) {
-                    console.error('API返回的数据不包含有效记录');
-                    showErrorMessage('没有有效的按键记录');
-                    return;
-                }
-                keystrokeData = data;
+            // 检查数组中的数据是否有效
+            const validData = data.filter(item => item && item.result);
+            if (validData.length === 0) {
+                console.error('API返回的数据不包含有效记录');
+                showErrorMessage('没有有效的按键记录');
+                return;
             }
+            keystrokeData = data;
         } else {
             console.error('API返回的数据格式无效');
             showErrorMessage('无法识别的数据格式');
@@ -199,7 +260,7 @@ async function fetchData() {
         // 清除之前的错误消息
         clearErrorMessages();
         
-        // 更新统计和图表 - 按照当前时间模式
+        // 更新统计和图表
         updateStatistics(filteredData);
         updateHourlyChart(filteredData);
         updateKeyboardHeatmap(filteredData);
@@ -347,15 +408,15 @@ function updateStatistics(data) {
     try {
         console.log('开始更新统计信息，数据长度:', data.length);
         // 合并所有数据
-    let allKeystrokes = [];
-    data.forEach(dayData => {
+        let allKeystrokes = [];
+        data.forEach(dayData => {
             if (!dayData || !dayData.result) {
                 console.error('日期数据无效:', dayData);
                 return;
             }
-        allKeystrokes = allKeystrokes.concat(dayData.result);
-    });
-    
+            allKeystrokes = allKeystrokes.concat(dayData.result);
+        });
+        
         console.log('合并后的按键数据长度:', allKeystrokes.length);
         
         // 更新总按键次数
@@ -374,70 +435,73 @@ function updateStatistics(data) {
         const hoursCount = {};
         let peakHour = '0';
         
-    allKeystrokes.forEach(stroke => {
-        const date = new Date(stroke.time);
+        allKeystrokes.forEach(stroke => {
+            const date = new Date(stroke.time);
             const hour = date.getHours().toString().padStart(2, '0');
             
             if (!hoursCount[hour]) {
                 hoursCount[hour] = 0;
             }
             
-        hoursCount[hour]++;
-    });
-    
+            hoursCount[hour]++;
+        });
+        
         // 计算平均每小时的按键次数
         const totalHours = Object.keys(hoursCount).length || 1; // 避免除零
         const avgPerHour = Math.round(allKeystrokes.length / totalHours);
-    document.getElementById('avg-per-hour').textContent = avgPerHour.toLocaleString();
-    
+        document.getElementById('avg-per-hour').textContent = avgPerHour.toLocaleString();
+        
         // 查找高峰时段
-    let peakCount = 0;
-    Object.entries(hoursCount).forEach(([hour, count]) => {
-        if (count > peakCount) {
-            peakCount = count;
-            peakHour = hour;
-        }
-    });
-    document.getElementById('peak-hour').textContent = `${peakHour}:00 - ${parseInt(peakHour) + 1}:00`;
-    
-    // 计算有效工作时长
-    // 定义连续活动的时间阈值（毫秒）
-    const activityThreshold = 5 * 60 * 1000; // 5分钟
-    
-    if (allKeystrokes.length > 0) {
-        // 按时间排序
-        allKeystrokes.sort((a, b) => a.time - b.time);
-        
-        let activeTime = 0;
-        let lastTime = allKeystrokes[0].time;
-        
-        for (let i = 1; i < allKeystrokes.length; i++) {
-            const currentTime = allKeystrokes[i].time;
-            const timeDiff = currentTime - lastTime;
-            
-            if (timeDiff < activityThreshold) {
-                activeTime += timeDiff;
+        let peakCount = 0;
+        Object.entries(hoursCount).forEach(([hour, count]) => {
+            if (count > peakCount) {
+                peakCount = count;
+                peakHour = hour;
             }
-            
-            lastTime = currentTime;
-        }
+        });
+        document.getElementById('peak-hour').textContent = `${peakHour}:00 - ${parseInt(peakHour) + 1}:00`;
         
-        // 转换为小时和分钟
-        const activeHours = Math.floor(activeTime / (60 * 60 * 1000));
-        const activeMinutes = Math.floor((activeTime % (60 * 60 * 1000)) / (60 * 1000));
+        // 计算有效工作时长和总工作时长
+        let totalActiveTime = 0;
+        let totalWorkingTime = 0;
         
+        data.forEach(dayData => {
+            if (dayData.first_activity_time && dayData.last_activity_time) {
+                // 计算总工作时长
+                const dayTotalTime = dayData.last_activity_time - dayData.first_activity_time;
+                totalWorkingTime += dayTotalTime;
+                
+                // 计算有效工作时长
+                let activeTime = 0;
+                const events = dayData.result;
+                if (events && events.length > 0) {
+                    events.sort((a, b) => a.time - b.time);
+                    let lastTime = events[0].time;
+                    
+                    for (let i = 1; i < events.length; i++) {
+                        const currentTime = events[i].time;
+                        const timeDiff = currentTime - lastTime;
+                        
+                        if (timeDiff < ACTIVITY_TIMEOUT) {
+                            activeTime += timeDiff;
+                        }
+                        
+                        lastTime = currentTime;
+                    }
+                }
+                totalActiveTime += activeTime;
+            }
+        });
+        
+        // 转换为小时和分钟并显示
+        const activeHours = Math.floor(totalActiveTime / (60 * 60 * 1000));
+        const activeMinutes = Math.floor((totalActiveTime % (60 * 60 * 1000)) / (60 * 1000));
         document.getElementById('active-time').textContent = `${activeHours}小时 ${activeMinutes}分钟`;
-            
-            // 计算总工作时长（从第一次按键到最后一次按键）
-            const totalWorkingTime = allKeystrokes[allKeystrokes.length - 1].time - allKeystrokes[0].time;
-            const totalHours = Math.floor(totalWorkingTime / (60 * 60 * 1000));
-            const totalMinutes = Math.floor((totalWorkingTime % (60 * 60 * 1000)) / (60 * 1000));
-            
-            document.getElementById('total-time').textContent = `${totalHours}小时 ${totalMinutes}分钟`;
-    } else {
-        document.getElementById('active-time').textContent = '0小时 0分钟';
-            document.getElementById('total-time').textContent = '0小时 0分钟';
-        }
+        
+        const totalHoursWorked = Math.floor(totalWorkingTime / (60 * 60 * 1000));
+        const totalMinutesWorked = Math.floor((totalWorkingTime % (60 * 60 * 1000)) / (60 * 1000));
+        document.getElementById('total-time').textContent = `${totalHoursWorked}小时 ${totalMinutesWorked}分钟`;
+        
     } catch (error) {
         console.error('更新统计信息失败:', error);
         document.getElementById('active-time').textContent = '计算失败';
@@ -1204,7 +1268,7 @@ function formatMovementTime(movements) {
 // 更新日历热力图
 function updateCalendarHeatmap() {
     try {
-        console.log('开始更新日历热力图');
+        console.log('开始更新日历热力图'); 
         // 准备日历数据 - 计算每天的工作时长
         const calendarData = {};
         
@@ -1317,7 +1381,7 @@ function updateCalendarHeatmap() {
         for (let i = 0; i < firstDayWeekday; i++) {
             const emptyCell = document.createElement('div');
             emptyCell.className = 'calendar-day';
-            emptyCell.style.backgroundColor = 'var(--gray-6)';
+            emptyCell.style.backgroundColor = '#ebedf0'; // GitHub风格的空白单元格颜色
             calendarGrid.appendChild(emptyCell);
         }
         
@@ -1351,9 +1415,23 @@ function updateCalendarHeatmap() {
                 const intensity = Math.min(displayHours / maxHours, 1);
                 
                 // 如果工作时长足够，直接设置背景色
-                if (displayHours >= 0.1) {
-                    dayCell.style.backgroundColor = `rgba(0, 122, 255, ${intensity.toFixed(2)})`;
-                    dayCell.style.color = intensity > 0.5 ? 'white' : 'var(--dark-color)';
+                if (displayHours > 0) {  // 只要时间大于0就显示颜色
+                    // 使用GitHub风格的绿色渐变
+                    const colorIndex = Math.floor(intensity * 4); // 0-4 之间的索引
+                    
+                    // GitHub风格的绿色渐变色阶
+                    const githubColors = [
+                        '#ebedf0', // 最浅
+                        '#9be9a8',
+                        '#40c463',
+                        '#30a14e',
+                        '#216e39'  // 最深
+                    ];
+                    
+                    // 确保有工作时长的单元格至少显示最浅的绿色
+                    const color = displayHours > 0 && colorIndex === 0 ? githubColors[1] : githubColors[colorIndex];
+                    dayCell.style.backgroundColor = color;
+                    dayCell.style.color = colorIndex >= 3 ? 'white' : 'var(--dark-color)'; // 深色背景用白色文字
                     
                     // 添加工作时长统计
                     const statsContainer = document.createElement('div');
@@ -1380,20 +1458,41 @@ function updateCalendarHeatmap() {
         
         // 创建图例项
         const legendSteps = [0, 0.25, 0.5, 0.75, 1];
-        legendSteps.forEach(step => {
+        const legendLabels = ['无数据', '少量', '中等', '较多', '大量'];
+        
+        // 为每个级别创建图例项
+        legendSteps.forEach((step, index) => {
             const item = document.createElement('div');
             item.className = 'legend-item';
             
             const colorBox = document.createElement('div');
             colorBox.className = 'legend-color';
-            colorBox.style.backgroundColor = `rgba(0, 122, 255, ${step.toFixed(2)})`;
+            
+            // 使用GitHub风格的绿色渐变
+            const githubColors = [
+                '#ebedf0', // 最浅
+                '#9be9a8',
+                '#40c463',
+                '#30a14e',
+                '#216e39'  // 最深
+            ];
+            
+            colorBox.style.backgroundColor = githubColors[index];
             item.appendChild(colorBox);
             
             const label = document.createElement('span');
             label.className = 'legend-label';
-            label.textContent = `${(step * maxHours).toFixed(1)}h`;
-            item.appendChild(label);
             
+            // 对第一个级别显示"无数据"
+            if (index === 0) {
+                label.textContent = legendLabels[0];
+            } else {
+                // 其他级别显示描述和对应的小时数
+                const hours = (step * maxHours).toFixed(1);
+                label.textContent = `${legendLabels[index]} (${hours}h)`;
+            }
+            
+            item.appendChild(label);
             legend.appendChild(item);
         });
         
@@ -1411,8 +1510,17 @@ function updateCalendarHeatmap() {
 // 更新操作时间分布图表
 async function updateOperationDistributionChart() {
     try {
-        // 根据当前时间模式获取数据
-        const response = await fetch(`/api/operation_distribution?mode=${currentMode}`);
+        let url = '/api/operation_distribution';
+        
+        // 根据当前模式构建URL
+        if (currentMode === 'custom') {
+            const dateStr = activeDate.toFormat('yyyy-MM-dd');
+            url += `?date=${dateStr}`;
+        } else {
+            url += `?mode=${currentMode}`;
+        }
+        
+        const response = await fetch(url);
         if (!response.ok) {
             throw new Error('获取操作分布数据失败');
         }
@@ -1642,19 +1750,28 @@ async function getMinuteActivityData() {
     try {
         const selector = document.getElementById('minute-chart-day-selector');
         const datePicker = document.getElementById('minute-chart-date-picker');
-        let targetDate = new Date();
+        let targetDate;
         
         if (selector.value === 'yesterday') {
-            targetDate.setDate(targetDate.getDate() - 1);
+            targetDate = DateTime.now().minus({ days: 1 });
         } else if (selector.value === 'custom' && datePicker.value) {
-            targetDate = new Date(datePicker.value);
+            targetDate = DateTime.fromISO(datePicker.value);
+        } else {
+            targetDate = DateTime.now();
         }
         
         // 将目标日期转换为 yyyy-MM-dd 格式
-        const dateStr = formatDateForInput(targetDate);
+        const dateStr = targetDate.toFormat('yyyy-MM-dd');
+        console.log('正在获取日期数据:', dateStr);
         
-        // 从当前的 keystrokeData 中找到对应日期的数据
-        const dayData = keystrokeData.find(data => data.date === dateStr);
+        // 从API获取指定日期的数据
+        const response = await fetch(`/api/today_data?date=${dateStr}`);
+        if (!response.ok) {
+            throw new Error(`获取数据失败: ${response.status}`);
+        }
+        
+        const dayData = await response.json();
+        console.log('API返回的日期数据:', dayData);
         
         if (!dayData || !dayData.result) {
             console.warn('未找到所选日期的数据:', dateStr);
@@ -1663,22 +1780,18 @@ async function getMinuteActivityData() {
         
         // 按分钟聚合数据
         const minuteData = {};
-        const startTime = new Date(dateStr);
-        startTime.setHours(0, 0, 0, 0);
+        const startTime = DateTime.fromISO(dateStr).startOf('day');
         
         // 初始化每分钟的数据为0
         for (let i = 0; i < 24 * 60; i++) {
-            const time = new Date(startTime);
-            time.setMinutes(i);
-            minuteData[time.getTime()] = 0;
+            const time = startTime.plus({ minutes: i });
+            minuteData[time.toMillis()] = 0;
         }
         
         // 统计每分钟的按键次数
         dayData.result.forEach(stroke => {
-            const time = new Date(stroke.time);
-            // 将时间规整到分钟
-            time.setSeconds(0, 0);
-            const timestamp = time.getTime();
+            const time = DateTime.fromMillis(stroke.time).startOf('minute');
+            const timestamp = time.toMillis();
             minuteData[timestamp] = (minuteData[timestamp] || 0) + 1;
         });
         

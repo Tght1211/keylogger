@@ -2,7 +2,7 @@ import os
 import sys
 import json
 import uuid
-import datetime
+from datetime import datetime, timedelta
 import threading
 import webbrowser
 from pathlib import Path
@@ -26,11 +26,25 @@ import io
 DATA_DIR = Path(__file__).parent / "data"
 DB_PATH = DATA_DIR / "keylogger.db"
 MAC_ADDRESS = str(uuid.getnode())
-TODAY = datetime.datetime.now().strftime("%Y-%m-%d")
+TODAY = datetime.now().strftime("%Y-%m-%d")
 is_recording = True
 last_move_time = None  # 添加鼠标移动时间全局变量
 app = Flask(__name__)
 icon = None  # 系统托盘图标
+
+# 定义操作超时时间（5分钟，单位：毫秒）
+ACTIVITY_TIMEOUT = 5 * 60 * 1000
+
+# 添加这些全局变量来跟踪修饰键状态
+modifier_keys_state = {
+    'Ctrl': False,
+    'Ctrl_r': False,
+    'Shift': False, 
+    'Shift_r': False,
+    'Alt': False,
+    'Alt_r': False,
+    'Win': False
+}
 
 def create_round_icon(width, height, color):
     # 创建一个圆形图标
@@ -41,15 +55,21 @@ def create_round_icon(width, height, color):
 
 def load_icon_image():
     """
-    加载系统托盘图标图像，必须使用秒表.png文件
+    加载系统托盘图标图像，使用工作留痕.png文件
     """
-    # 尝试加载秒表图标
-    icon_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static', 'img', '秒表.png')
+    # 尝试加载工作留痕图标
+    icon_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static', 'img', '工作留痕.png')
     if os.path.exists(icon_path):
-        print(f"加载秒表图标: {icon_path}")
+        print(f"加载工作留痕图标: {icon_path}")
         return Image.open(icon_path)
     else:
-        raise FileNotFoundError(f"找不到秒表图标文件: {icon_path}，请确保该文件存在")
+        # 如果找不到工作留痕图标，尝试使用秒表图标作为备用
+        backup_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static', 'img', '秒表.png')
+        if os.path.exists(backup_path):
+            print(f"加载备用图标: {backup_path}")
+            return Image.open(backup_path)
+        else:
+            raise FileNotFoundError(f"找不到图标文件: {icon_path}或{backup_path}，请确保图标文件存在")
 
 def add_to_startup():
     # 添加到开机自启
@@ -155,12 +175,12 @@ def save_event(action, event_type, timestamp):
         activity = ActivityTime(mac=MAC_ADDRESS, date=TODAY)
         session.add(activity)
     
-    # 更新最后活动时间
-    activity.last_activity_time = timestamp
-    
-    # 如果是首次记录，更新第一次活动时间
+    # 如果是首次记录，设置第一次活动时间（之后不再更改）
     if activity.first_activity_time is None:
         activity.first_activity_time = timestamp
+    
+    # 更新最后活动时间
+    activity.last_activity_time = timestamp
     
     # 每100次操作提交一次
     if session.new and len(session.new) >= 100:
@@ -170,10 +190,79 @@ def save_event(action, event_type, timestamp):
 def on_press(key):
     if not is_recording:
         return
+    
     print(str(key))
+    timestamp = int(datetime.now().timestamp() * 1000)
+    
+    # 检查是否是修饰键
+    is_modifier = False
+    modifier_name = None
+    
+    # 识别修饰键
+    if key == keyboard.Key.ctrl or key == keyboard.Key.ctrl_l:
+        modifier_name = "Ctrl"
+        is_modifier = True
+    elif key == keyboard.Key.ctrl_r:
+        modifier_name = "Ctrl_r"
+        is_modifier = True
+    elif key == keyboard.Key.shift or key == keyboard.Key.shift_l:
+        modifier_name = "Shift"
+        is_modifier = True
+    elif key == keyboard.Key.shift_r:
+        modifier_name = "Shift_r"
+        is_modifier = True
+    elif key == keyboard.Key.alt or key == keyboard.Key.alt_l:
+        modifier_name = "Alt"
+        is_modifier = True
+    elif key == keyboard.Key.alt_r or key == keyboard.Key.alt_gr:
+        modifier_name = "Alt_r"
+        is_modifier = True
+    elif key == keyboard.Key.cmd:
+        modifier_name = "Win"
+        is_modifier = True
+    
+    # 如果是修饰键，更新状态并记录
+    if is_modifier and modifier_name:
+        modifier_keys_state[modifier_name] = True
+        # 记录修饰键按下
+        save_event(modifier_name, "keyboard", timestamp)
+        return
+        
     try:
         # 尝试获取字符
         key_char = key.char
+        
+        # 检查是否是控制字符（如Ctrl+C生成的'\x03'）
+        if key_char and ord(key_char) < 32:
+            # 这是控制字符(组合键结果)
+            print(f"检测到控制字符: {repr(key_char)}")
+            
+            # 通过ASCII值识别对应的原始按键
+            # 例如: Ctrl+A 产生 \x01, A的ASCII是65, \x01对应的是1, 所以1+64=65, 对应字母A
+            char_code = ord(key_char)
+            
+            if 1 <= char_code <= 26:  # Ctrl+A 到 Ctrl+Z
+                # 计算对应的字母
+                letter = chr(char_code + 64)  # A 的 ASCII 是 65
+                print(f"识别为 Ctrl+{letter}")
+                # 保存原始字母键
+                save_event(letter.lower(), "keyboard", timestamp)
+            elif char_code == 27:  # Ctrl+[
+                save_event("[", "keyboard", timestamp)
+            elif char_code == 28:  # Ctrl+\
+                save_event("\\", "keyboard", timestamp)
+            elif char_code == 29:  # Ctrl+]
+                save_event("]", "keyboard", timestamp)
+            elif char_code == 30:  # Ctrl+6
+                save_event("6", "keyboard", timestamp)
+            elif char_code == 31:  # Ctrl+-
+                save_event("-", "keyboard", timestamp)
+            
+            return
+            
+        # 如果是正常字符键，记录实际字符
+        save_event(key_char, "keyboard", timestamp)
+            
     except AttributeError:
         # 特殊键使用名称
         if key == keyboard.Key.space:
@@ -184,20 +273,6 @@ def on_press(key):
             key_char = "Backspace"
         elif key == keyboard.Key.tab:
             key_char = "Tab"
-        elif key == keyboard.Key.shift or key == keyboard.Key.shift_l:
-            key_char = "Shift"
-        elif key == keyboard.Key.shift_r:
-            key_char = "Shift_r"
-        elif key == keyboard.Key.ctrl or key == keyboard.Key.ctrl_l:
-            key_char = "Ctrl"
-        elif key == keyboard.Key.ctrl_r:
-            key_char = "Ctrl_r"
-        elif key == keyboard.Key.alt or key == keyboard.Key.alt_l:
-            key_char = "Alt"
-        elif key == keyboard.Key.alt_r or key == keyboard.Key.alt_gr:
-            key_char = "Alt_r"
-        elif key == keyboard.Key.cmd:
-            key_char = "Win"
         elif key == keyboard.Key.caps_lock:
             key_char = "Caps"
         elif key == keyboard.Key.esc:
@@ -232,12 +307,30 @@ def on_press(key):
             key_char = "Menu"
         else:
             key_char = str(key).replace("Key.", "")
+            
+        # 记录非修饰键按下
+        save_event(key_char, "keyboard", timestamp)
 
-    # 获取当前时间戳
-    timestamp = int(datetime.datetime.now().timestamp() * 1000)
-    
-    # 保存按键事件
-    save_event(key_char, "keyboard", timestamp)
+# 处理键盘释放事件
+def on_release(key):
+    if not is_recording:
+        return
+        
+    # 检查是否是修饰键
+    if key == keyboard.Key.ctrl or key == keyboard.Key.ctrl_l:
+        modifier_keys_state["Ctrl"] = False
+    elif key == keyboard.Key.ctrl_r:
+        modifier_keys_state["Ctrl_r"] = False
+    elif key == keyboard.Key.shift or key == keyboard.Key.shift_l:
+        modifier_keys_state["Shift"] = False
+    elif key == keyboard.Key.shift_r:
+        modifier_keys_state["Shift_r"] = False
+    elif key == keyboard.Key.alt or key == keyboard.Key.alt_l:
+        modifier_keys_state["Alt"] = False
+    elif key == keyboard.Key.alt_r or key == keyboard.Key.alt_gr:
+        modifier_keys_state["Alt_r"] = False
+    elif key == keyboard.Key.cmd:
+        modifier_keys_state["Win"] = False
 
 # 处理鼠标移动
 def on_move(x, y):
@@ -245,8 +338,8 @@ def on_move(x, y):
         return
     
     # 获取当前时间戳
-    timestamp = int(datetime.datetime.now().timestamp() * 1000)
-    current_time = datetime.datetime.now()
+    timestamp = int(datetime.now().timestamp() * 1000)
+    current_time = datetime.now()
     
     # 全局变量用于限制移动事件记录频率
     global last_move_time
@@ -300,8 +393,7 @@ def send_static(path):
 
 @app.route('/favicon.ico')
 def favicon():
-    # 返回一个空响应，避免404错误
-    return '', 204
+    return send_from_directory('static/img', '工作留痕.png')
 
 @app.route('/api/keystroke_data')
 def get_keystroke_data():
@@ -347,16 +439,26 @@ def get_today_data():
     session.commit()  # 确保最新数据已保存
     
     try:
-        # 获取今日活动时间
-        activity = session.query(ActivityTime).filter_by(date=TODAY).first()
+        # 获取日期参数，如果没有则使用今天
+        date_str = request.args.get('date', TODAY)
+        print(f"请求日期: {date_str}")  # 添加调试日志
         
-        # 获取今日所有事件
-        events = session.query(KeystrokeEvent).filter_by(date=TODAY).all()
+        # 获取指定日期的活动时间
+        activity = session.query(ActivityTime).filter_by(
+            mac=MAC_ADDRESS,
+            date=date_str
+        ).first()
         
-        # 构建今日数据
-        today_data = {
+        # 获取指定日期的所有事件
+        events = session.query(KeystrokeEvent).filter_by(
+            mac=MAC_ADDRESS,
+            date=date_str
+        ).all()
+        
+        # 构建数据
+        data = {
             "mac": MAC_ADDRESS,
-            "date": TODAY,
+            "date": date_str,
             "result": [
                 {
                     "action": event.action,
@@ -368,93 +470,91 @@ def get_today_data():
         
         # 添加活动时间
         if activity:
-            today_data["first_activity_time"] = activity.first_activity_time
-            today_data["last_activity_time"] = activity.last_activity_time
+            data["first_activity_time"] = activity.first_activity_time
+            data["last_activity_time"] = activity.last_activity_time
+        else:
+            # 如果没有找到活动时间记录，返回空数据
+            data["first_activity_time"] = None
+            data["last_activity_time"] = None
         
-        return jsonify(today_data)
+        print(f"返回数据: {data}")  # 添加调试日志
+        return jsonify(data)
     except Exception as e:
-        print(f"获取今日数据出错: {str(e)}")
+        print(f"获取数据出错: {str(e)}")
         return jsonify({"error": f"数据加载失败: {str(e)}"})
 
 @app.route('/api/operation_distribution')
 def get_operation_distribution():
     try:
-        # 获取日期参数
-        date = request.args.get('date', TODAY)
         mode = request.args.get('mode', 'today')
+        date = request.args.get('date')
         
-        # 初始化24小时的数据结构
-        hourly_data = {
-            "keyboard": [0] * 24,  # 键盘操作
-            "mouse": [0] * 24,     # 鼠标操作
-            "total": [0] * 24      # 总操作
-        }
-
-        if mode == 'today':
-            # 只处理今日数据
-            events = session.query(KeystrokeEvent).filter_by(date=TODAY).all()
-            
-            # 统计每个小时的操作次数
-            for event in events:
-                timestamp = event.time
-                hour = datetime.datetime.fromtimestamp(timestamp/1000).hour
-                
-                if event.type == "keyboard":
-                    hourly_data["keyboard"][hour] += 1
-                elif event.type == "mouse":
-                    hourly_data["mouse"][hour] += 1
-                    
-                hourly_data["total"][hour] += 1
-            
-            return jsonify(hourly_data)
-        
-        elif mode in ['week', 'month']:
-            # 周或月模式，需要处理多个日期
-            now = datetime.datetime.now()
-            
-            # 确定日期范围
-            if mode == 'week':
-                # 获取本周的所有日期
-                today = now.date()
-                weekday = today.weekday()  # 0是周一，6是周日
-                start_date = today - datetime.timedelta(days=weekday)
-                date_range = [start_date + datetime.timedelta(days=i) for i in range(7)]
-            else:  # month模式
-                # 获取本月的所有日期
-                year, month = now.year, now.month
-                _, last_day = calendar.monthrange(year, month)
-                date_range = [datetime.date(year, month, day) for day in range(1, last_day + 1)]
-            
-            # 遍历日期范围内的所有数据
-            for date in date_range:
-                date_str = date.strftime("%Y-%m-%d")
-                events = session.query(KeystrokeEvent).filter_by(date=date_str).all()
-                
-                for event in events:
-                    timestamp = event.time
-                    hour = datetime.datetime.fromtimestamp(timestamp/1000).hour
-                    
-                    if event.type == "keyboard":
-                        hourly_data["keyboard"][hour] += 1
-                    elif event.type == "mouse":
-                        hourly_data["mouse"][hour] += 1
-                        
-                    hourly_data["total"][hour] += 1
-            
-            return jsonify(hourly_data)
-        
+        # 如果提供了具体日期，使用该日期
+        if date:
+            # 获取指定日期的数据
+            events = session.query(KeystrokeEvent).filter_by(
+                mac=MAC_ADDRESS,
+                date=date
+            ).all()
         else:
-            return jsonify({"error": "不支持的模式"})
+            # 根据模式获取数据
+            if mode == 'today':
+                events = session.query(KeystrokeEvent).filter_by(
+                    mac=MAC_ADDRESS,
+                    date=TODAY
+                ).all()
+            elif mode == 'week':
+                # 获取本周开始和结束日期
+                today = datetime.strptime(TODAY, '%Y-%m-%d')
+                week_start = (today - timedelta(days=today.weekday())).strftime('%Y-%m-%d')
+                week_end = (today + timedelta(days=6-today.weekday())).strftime('%Y-%m-%d')
+                
+                events = session.query(KeystrokeEvent).filter(
+                    KeystrokeEvent.mac == MAC_ADDRESS,
+                    KeystrokeEvent.date >= week_start,
+                    KeystrokeEvent.date <= week_end
+                ).all()
+            elif mode == 'month':
+                # 获取本月开始和结束日期
+                today = datetime.strptime(TODAY, '%Y-%m-%d')
+                month_start = today.replace(day=1).strftime('%Y-%m-%d')
+                next_month = today.replace(day=28) + timedelta(days=4)
+                month_end = (next_month - timedelta(days=next_month.day)).strftime('%Y-%m-%d')
+                
+                events = session.query(KeystrokeEvent).filter(
+                    KeystrokeEvent.mac == MAC_ADDRESS,
+                    KeystrokeEvent.date >= month_start,
+                    KeystrokeEvent.date <= month_end
+                ).all()
+            else:
+                return jsonify({'error': '不支持的模式'})
+        
+        # 初始化每小时的键盘和鼠标操作计数
+        keyboard_counts = [0] * 24
+        mouse_counts = [0] * 24
+        
+        # 统计每小时的操作次数
+        for event in events:
+            hour = datetime.fromtimestamp(event.time / 1000).hour
+            if event.type == 'keyboard':
+                keyboard_counts[hour] += 1
+            elif event.type == 'mouse':
+                mouse_counts[hour] += 1
+        
+        return jsonify({
+            'keyboard': keyboard_counts,
+            'mouse': mouse_counts
+        })
         
     except Exception as e:
-        print(f"获取操作分布出错: {str(e)}")
-        return jsonify({"error": f"数据加载失败: {str(e)}"})
+        print(f"获取操作分布数据失败: {str(e)}")
+        return jsonify({'error': f"获取数据失败: {str(e)}"})
 
 # GUI类
 class KeyLoggerApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("操作记录器")
+        self.root.title("工作留痕")
         self.root.geometry("280x220")  # 更小的窗口尺寸
         self.root.resizable(False, False)  # 禁止调整窗口大小
         
@@ -545,7 +645,7 @@ class KeyLoggerApp:
         # 标题
         title_label = ttk.Label(
             frame,
-            text="操作记录器",
+            text="工作留痕",
             style='Title.TLabel'
         )
         title_label.pack(fill=tk.X, pady=(0, 8))
@@ -611,7 +711,7 @@ class KeyLoggerApp:
             pystray.MenuItem("查看统计", self.show_stats),
             pystray.MenuItem("退出", self.quit_app)
         )
-        self.icon = pystray.Icon("keylogger", image, "操作记录器", menu)
+        self.icon = pystray.Icon("keylogger", image, "工作留痕", menu)
         
     def show_window(self, icon=None, item=None):
         self.icon.stop()
@@ -685,7 +785,7 @@ def main():
     flask_thread.start()
     
     # 启动键盘监听
-    keyboard_listener = keyboard.Listener(on_press=on_press)
+    keyboard_listener = keyboard.Listener(on_press=on_press, on_release=on_release)
     keyboard_listener.start()
     
     # 启动鼠标监听
@@ -713,7 +813,7 @@ def main():
             pystray.MenuItem("查看统计", lambda: webbrowser.open('http://127.0.0.1:5000/')),
             pystray.MenuItem("退出", lambda: sys.exit(0))
         )
-        icon = pystray.Icon("keylogger", image, "操作记录器", menu)
+        icon = pystray.Icon("keylogger", image, "工作留痕", menu)
         icon.run()
     else:
         # 创建主窗口
@@ -811,19 +911,20 @@ def on_closing():
 if __name__ == "__main__":
     try:
         # 检查图标文件是否存在
-        icon_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static', 'img', '秒表.png')
+        icon_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static', 'img', '工作留痕.png')
+        
+        # 如果工作留痕.png不存在，尝试查找秒表.png作为备用
         if not os.path.exists(icon_path):
-            print(f"错误: 找不到秒表图标文件: {icon_path}")
-            print("请确保秒表.png文件存在于static/img目录下")
-            sys.exit(1)
-            
+            backup_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static', 'img', '秒表.png')
+            if not os.path.exists(backup_path):
+                print(f"错误: 找不到图标文件: {icon_path}或{backup_path}")
+                print("请确保图标文件存在于static/img目录下")
+                sys.exit(1)
+                
         main()
     except KeyboardInterrupt:
         print("\n程序已退出")
     except FileNotFoundError as e:
         print(f"错误: {e}")
-        print("请确保秒表.png文件存在于static/img目录下")
-        sys.exit(1)
-    except Exception as e:
-        print(f"发生错误: {e}")
+        print("请确保图标文件存在于static/img目录下")
         sys.exit(1) 
