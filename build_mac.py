@@ -26,7 +26,6 @@ def build_mac_app():
             print(f"警告: 未找到Mac图标文件({icon_path})，但找到PNG图标，将尝试转换")
             try:
                 # 如果在Mac系统上，可以使用以下命令创建icns文件
-                # 注意: 这需要安装png2icns或iconutil工具
                 os.makedirs('icon.iconset', exist_ok=True)
                 subprocess.run(['sips', '-z', '16', '16', png_icon, '--out', 'icon.iconset/icon_16x16.png'], check=True)
                 subprocess.run(['sips', '-z', '32', '32', png_icon, '--out', 'icon.iconset/icon_16x16@2x.png'], check=True)
@@ -64,12 +63,18 @@ def build_mac_app():
         f'--icon={icon_path}',  # 设置应用程序图标
         '--name=工作留痕',  # 设置输出的app文件名
         '--osx-bundle-identifier=com.akr.keylogger',  # 设置Bundle ID
-        # 添加所需的数据文件，但不包括data目录
-        '--add-data=static:static',  # 注意Mac和Windows的路径分隔符不同
-        '--add-data=templates:templates',  # 注意Mac和Windows的路径分隔符不同
-        '--hidden-import=pystray._darwin',  # Mac版本的pystray后端
+        # 添加所需的数据文件
+        '--add-data=static:static',
+        '--add-data=templates:templates',
+        # 添加必要的依赖
+        '--hidden-import=pystray._darwin',
         '--hidden-import=PIL._tkinter_finder',
-        'main.py'  # 入口脚本
+        '--hidden-import=AppKit',
+        '--hidden-import=keyboard',
+        '--hidden-import=mouse',
+        # 添加权限
+        '--osx-entitlements-file=entitlements.plist',
+        'main.py'
     ]
     
     print("执行命令:", ' '.join(cmd))

@@ -5,7 +5,10 @@ dash-bootstrap-components==1.4.1
 plotly==5.15.0
 pandas==2.0.3
 uuid==1.30
-sqlalchemy==2.0.27
-pystray==0.19.5
-Pillow==10.2.0
-pywin32==306
+sqlalchemy>=2.0.0
+pystray>=0.19.5
+Pillow>=10.0.0
+pywin32; sys_platform == 'win32'  # 仅在Windows上安装
+python-xlib; sys_platform == 'linux'  # 仅在Linux上安装
+keyboard>=0.13.5
+mouse>=0.7.1

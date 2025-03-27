@@ -16,11 +16,14 @@ from sqlalchemy import create_engine, Column, Integer, String, Text, inspect
 from sqlalchemy.orm import declarative_base, sessionmaker
 import pystray
 from PIL import Image, ImageDraw, ImageTk, ImageColor
+import sys
+import platform
 import winreg
 import win32gui
 import win32con
-import argparse
-import io
+from AppKit import NSWorkspace
+from Xlib import X, display
+import subprocess
 
 # 全局变量
 DATA_DIR = Path(__file__).parent / "data"
@@ -72,48 +75,118 @@ def load_icon_image():
             raise FileNotFoundError(f"找不到图标文件: {icon_path}或{backup_path}，请确保图标文件存在")
 
 def add_to_startup():
-    # 添加到开机自启
-    key_path = r"Software\Microsoft\Windows\CurrentVersion\Run"
-    try:
-        key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, key_path, 0, winreg.KEY_ALL_ACCESS)
-    except:
-        key = winreg.CreateKey(winreg.HKEY_CURRENT_USER, key_path)
-    
-    app_path = os.path.abspath(sys.argv[0])
-    if app_path.endswith('.py'):
-        # 如果是 Python 脚本，使用 pythonw.exe 运行
-        python_path = os.path.join(os.path.dirname(sys.executable), 'pythonw.exe')
-        command = f'"{python_path}" "{app_path}"'
-    else:
-        # 如果是可执行文件，直接运行
-        command = f'"{app_path}"'
-    
-    winreg.SetValueEx(key, "KeyLogger", 0, winreg.REG_SZ, command)
-    winreg.CloseKey(key)
+    """添加到开机自启动"""
+    if sys.platform == 'win32':
+        key_path = r"Software\Microsoft\Windows\CurrentVersion\Run"
+        try:
+            key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, key_path, 0, winreg.KEY_ALL_ACCESS)
+        except:
+            key = winreg.CreateKey(winreg.HKEY_CURRENT_USER, key_path)
+        
+        app_path = os.path.abspath(sys.argv[0])
+        if app_path.endswith('.py'):
+            python_path = os.path.join(os.path.dirname(sys.executable), 'pythonw.exe')
+            command = f'"{python_path}" "{app_path}"'
+        else:
+            command = f'"{app_path}"'
+        
+        winreg.SetValueEx(key, "KeyLogger", 0, winreg.REG_SZ, command)
+        winreg.CloseKey(key)
+    elif sys.platform == 'darwin':
+        # Mac系统自启动
+        plist_path = os.path.expanduser('~/Library/LaunchAgents/com.akr.keylogger.plist')
+        app_path = os.path.abspath(sys.argv[0])
+        
+        plist_content = f"""<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.akr.keylogger</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>{app_path}</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+</dict>
+</plist>"""
+        
+        # 确保目录存在
+        os.makedirs(os.path.dirname(plist_path), exist_ok=True)
+        
+        with open(plist_path, 'w') as f:
+            f.write(plist_content)
+        
+        # 设置正确的权限
+        os.chmod(plist_path, 0o644)
+        
+        # 加载新的启动项
+        subprocess.run(['launchctl', 'load', plist_path], check=True)
 
 def remove_from_startup():
-    # 从开机自启动中移除
-    key_path = r"Software\Microsoft\Windows\CurrentVersion\Run"
-    try:
-        key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, key_path, 0, winreg.KEY_ALL_ACCESS)
-        winreg.DeleteValue(key, "KeyLogger")
-        winreg.CloseKey(key)
-    except:
-        pass
+    """从开机自启动中移除"""
+    if sys.platform == 'win32':
+        key_path = r"Software\Microsoft\Windows\CurrentVersion\Run"
+        try:
+            key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, key_path, 0, winreg.KEY_ALL_ACCESS)
+            winreg.DeleteValue(key, "KeyLogger")
+            winreg.CloseKey(key)
+        except:
+            pass
+    elif sys.platform == 'darwin':
+        plist_path = os.path.expanduser('~/Library/LaunchAgents/com.akr.keylogger.plist')
+        if os.path.exists(plist_path):
+            # 卸载启动项
+            subprocess.run(['launchctl', 'unload', plist_path], check=True)
+            # 删除plist文件
+            os.remove(plist_path)
 
 def is_in_startup():
-    # 检查是否在开机自启动中
-    key_path = r"Software\Microsoft\Windows\CurrentVersion\Run"
+    """检查是否在开机自启动中"""
+    if sys.platform == 'win32':
+        key_path = r"Software\Microsoft\Windows\CurrentVersion\Run"
+        try:
+            key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, key_path, 0, winreg.KEY_READ)
+            winreg.QueryValueEx(key, "KeyLogger")
+            winreg.CloseKey(key)
+            return True
+        except:
+            return False
+    elif sys.platform == 'darwin':
+        plist_path = os.path.expanduser('~/Library/LaunchAgents/com.akr.keylogger.plist')
+        return os.path.exists(plist_path)
+    return False
+
+def ensure_data_directory():
+    """确保数据目录存在并具有正确的权限"""
     try:
-        key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, key_path, 0, winreg.KEY_READ)
-        winreg.QueryValueEx(key, "KeyLogger")
-        winreg.CloseKey(key)
+        print(f"正在创建数据目录: {DATA_DIR}")
+        DATA_DIR.mkdir(parents=True, exist_ok=True)
+        
+        # 检查目录权限
+        if not os.access(DATA_DIR, os.W_OK):
+            print(f"警告: 数据目录没有写入权限: {DATA_DIR}")
+            # 尝试修改权限
+            try:
+                os.chmod(DATA_DIR, 0o777)
+                print("已修改数据目录权限")
+            except Exception as e:
+                print(f"修改目录权限失败: {e}")
+                return False
+        
+        print(f"数据目录创建成功: {DATA_DIR}")
         return True
-    except:
+    except Exception as e:
+        print(f"创建数据目录失败: {e}")
         return False
 
 # 确保数据目录存在
-os.makedirs(DATA_DIR, exist_ok=True)
+if not ensure_data_directory():
+    print("错误: 无法创建或访问数据目录")
+    sys.exit(1)
 
 # 数据库设置
 Base = declarative_base()
@@ -138,53 +211,76 @@ class ActivityTime(Base):
     last_activity_time = Column(Integer, nullable=True)
 
 # 创建数据库引擎和会话
-engine = create_engine(f'sqlite:///{DB_PATH}')
-Session = sessionmaker(bind=engine)
-session = Session()
+try:
+    print(f"正在创建数据库连接: {DB_PATH}")
+    engine = create_engine(f'sqlite:///{DB_PATH}')
+    Session = sessionmaker(bind=engine)
+    session = Session()
+    print("数据库连接创建成功")
+except Exception as e:
+    print(f"创建数据库连接失败: {e}")
+    sys.exit(1)
 
 # 初始化数据库
 def init_db():
-    # 如果表不存在，创建表
-    if not inspect(engine).has_table('keystroke_events'):
-        Base.metadata.create_all(engine)
-    if not inspect(engine).has_table('activity_times'):
-        Base.metadata.create_all(engine)
-    
-    # 检查今天的活动时间记录是否存在
-    activity = session.query(ActivityTime).filter_by(mac=MAC_ADDRESS, date=TODAY).first()
-    if not activity:
-        # 创建新的活动时间记录
-        activity = ActivityTime(mac=MAC_ADDRESS, date=TODAY)
-        session.add(activity)
-        session.commit()
+    try:
+        print("开始初始化数据库...")
+        # 如果表不存在，创建表
+        if not inspect(engine).has_table('keystroke_events'):
+            print("创建 keystroke_events 表...")
+            Base.metadata.create_all(engine)
+        if not inspect(engine).has_table('activity_times'):
+            print("创建 activity_times 表...")
+            Base.metadata.create_all(engine)
+        
+        # 检查今天的活动时间记录是否存在
+        activity = session.query(ActivityTime).filter_by(mac=MAC_ADDRESS, date=TODAY).first()
+        if not activity:
+            print("创建今天的活动时间记录...")
+            # 创建新的活动时间记录
+            activity = ActivityTime(mac=MAC_ADDRESS, date=TODAY)
+            session.add(activity)
+            session.commit()
+        
+        print("数据库初始化完成")
+        return True
+    except Exception as e:
+        print(f"初始化数据库失败: {e}")
+        session.rollback()
+        return False
 
 # 保存按键/鼠标事件
 def save_event(action, event_type, timestamp):
-    event = KeystrokeEvent(
-        mac=MAC_ADDRESS,
-        date=TODAY,
-        action=action,
-        time=timestamp,
-        type=event_type
-    )
-    session.add(event)
-    
-    # 更新活动时间
-    activity = session.query(ActivityTime).filter_by(mac=MAC_ADDRESS, date=TODAY).first()
-    if not activity:
-        activity = ActivityTime(mac=MAC_ADDRESS, date=TODAY)
-        session.add(activity)
-    
-    # 如果是首次记录，设置第一次活动时间（之后不再更改）
-    if activity.first_activity_time is None:
-        activity.first_activity_time = timestamp
-    
-    # 更新最后活动时间
-    activity.last_activity_time = timestamp
-    
-    # 每100次操作提交一次
-    if session.new and len(session.new) >= 100:
-        session.commit()
+    try:
+        event = KeystrokeEvent(
+            mac=MAC_ADDRESS,
+            date=TODAY,
+            action=action,
+            time=timestamp,
+            type=event_type
+        )
+        session.add(event)
+        
+        # 更新活动时间
+        activity = session.query(ActivityTime).filter_by(mac=MAC_ADDRESS, date=TODAY).first()
+        if not activity:
+            activity = ActivityTime(mac=MAC_ADDRESS, date=TODAY)
+            session.add(activity)
+        
+        # 如果是首次记录，设置第一次活动时间（之后不再更改）
+        if activity.first_activity_time is None:
+            activity.first_activity_time = timestamp
+        
+        # 更新最后活动时间
+        activity.last_activity_time = timestamp
+        
+        # 每100次操作提交一次
+        if session.new and len(session.new) >= 100:
+            session.commit()
+            print(f"已保存 {len(session.new)} 条记录")
+    except Exception as e:
+        print(f"保存事件失败: {e}")
+        session.rollback()
 
 # 处理键盘事件
 def on_press(key):
@@ -777,24 +873,33 @@ class KeyLoggerApp:
         webbrowser.open('http://127.0.0.1:5000/')
 
 def main():
+    print("程序启动...")
+    
     # 初始化数据库
-    init_db()
+    if not init_db():
+        print("数据库初始化失败，程序退出")
+        sys.exit(1)
     
     # 启动 Flask 服务器
+    print("启动 Flask 服务器...")
     flask_thread = threading.Thread(target=run_flask, daemon=True)
     flask_thread.start()
     
     # 启动键盘监听
+    print("启动键盘监听...")
     keyboard_listener = keyboard.Listener(on_press=on_press, on_release=on_release)
     keyboard_listener.start()
     
     # 启动鼠标监听
+    print("启动鼠标监听...")
     mouse_listener = mouse.Listener(
         on_move=on_move,
         on_click=on_click,
         on_scroll=on_scroll
     )
     mouse_listener.start()
+    
+    print("所有监听器已启动")
     
     # 解析命令行参数
     parser = argparse.ArgumentParser(description='工作留痕')
@@ -907,6 +1012,71 @@ def on_closing():
     # 保存最后的数据
     session.commit()
     sys.exit(0)
+
+def get_active_window():
+    """获取当前活动窗口的标题"""
+    if sys.platform == 'win32':
+        hwnd = win32gui.GetForegroundWindow()
+        return win32gui.GetWindowText(hwnd)
+    elif sys.platform == 'darwin':
+        workspace = NSWorkspace.sharedWorkspace()
+        return workspace.activeApplication()['NSApplicationName']
+    elif sys.platform == 'linux':
+        d = display.Display()
+        root = d.screen().root
+        active_window = root.get_full_property(
+            d.intern_atom('_NET_ACTIVE_WINDOW'),
+            X.AnyPropertyType
+        ).value[0]
+        window = d.create_resource_object('window', active_window)
+        return window.get_full_property(
+            d.intern_atom('_NET_WM_NAME'),
+            X.AnyPropertyType
+        ).value.decode('utf-8')
+    return "Unknown"
+
+def get_window_info():
+    """获取窗口信息"""
+    if sys.platform == 'win32':
+        hwnd = win32gui.GetForegroundWindow()
+        rect = win32gui.GetWindowRect(hwnd)
+        return {
+            'title': win32gui.GetWindowText(hwnd),
+            'class_name': win32gui.GetClassName(hwnd),
+            'position': rect
+        }
+    elif sys.platform == 'darwin':
+        workspace = NSWorkspace.sharedWorkspace()
+        app = workspace.activeApplication()
+        return {
+            'title': app['NSApplicationName'],
+            'class_name': app['NSApplicationBundleIdentifier'],
+            'position': (0, 0, 0, 0)  # macOS下获取窗口位置比较复杂，暂时返回默认值
+        }
+    elif sys.platform == 'linux':
+        d = display.Display()
+        root = d.screen().root
+        active_window = root.get_full_property(
+            d.intern_atom('_NET_ACTIVE_WINDOW'),
+            X.AnyPropertyType
+        ).value[0]
+        window = d.create_resource_object('window', active_window)
+        return {
+            'title': window.get_full_property(
+                d.intern_atom('_NET_WM_NAME'),
+                X.AnyPropertyType
+            ).value.decode('utf-8'),
+            'class_name': window.get_full_property(
+                d.intern_atom('WM_CLASS'),
+                X.AnyPropertyType
+            ).value.decode('utf-8'),
+            'position': (0, 0, 0, 0)  # Linux下获取窗口位置比较复杂，暂时返回默认值
+        }
+    return {
+        'title': 'Unknown',
+        'class_name': 'Unknown',
+        'position': (0, 0, 0, 0)
+    }
 
 if __name__ == "__main__":
     try:
