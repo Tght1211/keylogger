@@ -24,12 +24,12 @@ imports:
  &#8226;   <a href="#PIL.ImageColor">PIL.ImageColor</a>
  &#8226;   <a href="#PIL.ImageDraw">PIL.ImageDraw</a>
  &#8226;   <a href="#PIL.ImageTk">PIL.ImageTk</a>
- &#8226;   <a href="#PIL._tkinter_finder">PIL._tkinter_finder</a>
  &#8226;   <a href="#Xlib">Xlib</a>
  &#8226;   <a href="#_bootlocale">_bootlocale</a>
  &#8226;   <a href="#_collections_abc">_collections_abc</a>
  &#8226;   <a href="#_weakrefset">_weakrefset</a>
  &#8226;   <a href="#abc">abc</a>
+ &#8226;   <a href="#argparse">argparse</a>
  &#8226;   <a href="#calendar">calendar</a>
  &#8226;   <a href="#codecs">codecs</a>
  &#8226;   <a href="#collections">collections</a>
@@ -183,9 +183,10 @@ imports:
  &#8226;   <a href="#pyi_rth_pywintypes.py">pyi_rth_pywintypes.py</a>
  &#8226;   <a href="#pynput">pynput</a>
  &#8226;   <a href="#pynput.keyboard">pynput.keyboard</a>
+ &#8226;   <a href="#pynput.keyboard._win32">pynput.keyboard._win32</a>
  &#8226;   <a href="#pynput.mouse">pynput.mouse</a>
+ &#8226;   <a href="#pynput.mouse._win32">pynput.mouse._win32</a>
  &#8226;   <a href="#pystray">pystray</a>
- &#8226;   <a href="#pystray._win32">pystray._win32</a>
  &#8226;   <a href="#re">re</a>
  &#8226;   <a href="#reprlib">reprlib</a>
  &#8226;   <a href="#sqlalchemy">sqlalchemy</a>
@@ -812,7 +813,6 @@ imported by:
  &#8226;   <a href="#PIL._imagingft">PIL._imagingft</a>
  &#8226;   <a href="#PIL._imagingmath">PIL._imagingmath</a>
  &#8226;   <a href="#PIL._imagingtk">PIL._imagingtk</a>
- &#8226;   <a href="#PIL._tkinter_finder">PIL._tkinter_finder</a>
  &#8226;   <a href="#PIL._typing">PIL._typing</a>
  &#8226;   <a href="#PIL._util">PIL._util</a>
  &#8226;   <a href="#PIL._version">PIL._version</a>
@@ -2929,24 +2929,6 @@ imported by:
 </div>
 
 <div class="node">
-  <a name="PIL._tkinter_finder"></a>
-  <a target="code" href="///E:/develop/python39/lib/site-packages/PIL/_tkinter_finder.py" type="text/plain"><tt>PIL._tkinter_finder</tt></a>
-<span class="moduletype">SourceModule</span>  <div class="import">
-imports:
-    <a href="#PIL">PIL</a>
- &#8226;   <a href="#__future__">__future__</a>
- &#8226;   <a href="#sys">sys</a>
-
-  </div>
-  <div class="import">
-imported by:
-    <a href="#main.py">main.py</a>
-
-  </div>
-
-</div>
-
-<div class="node">
   <a name="PIL._typing"></a>
   <a target="code" href="///E:/develop/python39/lib/site-packages/PIL/_typing.py" type="text/plain"><tt>PIL._typing</tt></a>
 <span class="moduletype">SourceModule</span>  <div class="import">
@@ -3205,7 +3187,6 @@ imported by:
  &#8226;   <a href="#PIL.XpmImagePlugin">PIL.XpmImagePlugin</a>
  &#8226;   <a href="#PIL._binary">PIL._binary</a>
  &#8226;   <a href="#PIL._deprecate">PIL._deprecate</a>
- &#8226;   <a href="#PIL._tkinter_finder">PIL._tkinter_finder</a>
  &#8226;   <a href="#PIL._typing">PIL._typing</a>
  &#8226;   <a href="#PIL._util">PIL._util</a>
  &#8226;   <a href="#PIL._version">PIL._version</a>
@@ -4559,6 +4540,7 @@ imported by:
  &#8226;   <a href="#gzip">gzip</a>
  &#8226;   <a href="#http.server">http.server</a>
  &#8226;   <a href="#inspect">inspect</a>
+ &#8226;   <a href="#main.py">main.py</a>
  &#8226;   <a href="#tarfile">tarfile</a>
  &#8226;   <a href="#tokenize">tokenize</a>
  &#8226;   <a href="#unittest.main">unittest.main</a>
@@ -22697,7 +22679,6 @@ imports:
  &#8226;   <a href="#os">os</a>
  &#8226;   <a href="#pynput">pynput</a>
  &#8226;   <a href="#pynput._util">pynput._util</a>
- &#8226;   <a href="#pynput._util.win32_vks">pynput._util.win32_vks</a>
  &#8226;   <a href="#six">six</a>
  &#8226;   <a href="#six.moves">six.moves</a>
  &#8226;   <a href="#six.moves.queue">six.moves.queue</a>
@@ -22825,7 +22806,6 @@ imports:
   <div class="import">
 imported by:
     <a href="#pynput">pynput</a>
- &#8226;   <a href="#pynput._util">pynput._util</a>
  &#8226;   <a href="#pynput._util.win32">pynput._util.win32</a>
  &#8226;   <a href="#pynput.keyboard._win32">pynput.keyboard._win32</a>
 
@@ -22888,6 +22868,7 @@ imports:
  &#8226;   <a href="#pynput">pynput</a>
  &#8226;   <a href="#pynput._util">pynput._util</a>
  &#8226;   <a href="#pynput.keyboard">pynput.keyboard</a>
+ &#8226;   <a href="#pynput.keyboard._base">pynput.keyboard._base</a>
 
   </div>
   <div class="import">
@@ -22924,6 +22905,7 @@ imports:
   <div class="import">
 imported by:
     <a href="#pynput">pynput</a>
+ &#8226;   <a href="#pynput.keyboard">pynput.keyboard</a>
  &#8226;   <a href="#pynput.keyboard._darwin">pynput.keyboard._darwin</a>
  &#8226;   <a href="#pynput.keyboard._dummy">pynput.keyboard._dummy</a>
  &#8226;   <a href="#pynput.keyboard._uinput">pynput.keyboard._uinput</a>
@@ -23019,7 +23001,8 @@ imports:
   </div>
   <div class="import">
 imported by:
-    <a href="#pynput">pynput</a>
+    <a href="#main.py">main.py</a>
+ &#8226;   <a href="#pynput">pynput</a>
 
   </div>
 
@@ -23061,6 +23044,7 @@ imports:
     <a href="#pynput">pynput</a>
  &#8226;   <a href="#pynput._util">pynput._util</a>
  &#8226;   <a href="#pynput.mouse">pynput.mouse</a>
+ &#8226;   <a href="#pynput.mouse._base">pynput.mouse._base</a>
 
   </div>
   <div class="import">
@@ -23092,6 +23076,7 @@ imports:
   <div class="import">
 imported by:
     <a href="#pynput">pynput</a>
+ &#8226;   <a href="#pynput.mouse">pynput.mouse</a>
  &#8226;   <a href="#pynput.mouse._darwin">pynput.mouse._darwin</a>
  &#8226;   <a href="#pynput.mouse._dummy">pynput.mouse._dummy</a>
  &#8226;   <a href="#pynput.mouse._win32">pynput.mouse._win32</a>
@@ -23155,7 +23140,8 @@ imports:
   </div>
   <div class="import">
 imported by:
-    <a href="#pynput">pynput</a>
+    <a href="#main.py">main.py</a>
+ &#8226;   <a href="#pynput">pynput</a>
 
   </div>
 
@@ -23479,8 +23465,7 @@ imports:
   </div>
   <div class="import">
 imported by:
-    <a href="#main.py">main.py</a>
- &#8226;   <a href="#pystray">pystray</a>
+    <a href="#pystray">pystray</a>
 
   </div>
 
@@ -32726,7 +32711,6 @@ imported by:
  &#8226;   <a href="#PIL.ImageShow">PIL.ImageShow</a>
  &#8226;   <a href="#PIL.JpegImagePlugin">PIL.JpegImagePlugin</a>
  &#8226;   <a href="#PIL.SpiderImagePlugin">PIL.SpiderImagePlugin</a>
- &#8226;   <a href="#PIL._tkinter_finder">PIL._tkinter_finder</a>
  &#8226;   <a href="#PIL._typing">PIL._typing</a>
  &#8226;   <a href="#PIL.features">PIL.features</a>
  &#8226;   <a href="#_aix_support">_aix_support</a>

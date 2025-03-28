@@ -16,24 +16,58 @@ from sqlalchemy import create_engine, Column, Integer, String, Text, inspect
 from sqlalchemy.orm import declarative_base, sessionmaker
 import pystray
 from PIL import Image, ImageDraw, ImageTk, ImageColor
-import sys
 import platform
-import winreg
-import win32gui
-import win32con
-from AppKit import NSWorkspace
-from Xlib import X, display
 import subprocess
+import argparse
+
+# 根据操作系统导入相应的模块
+if sys.platform == 'win32':
+    import winreg
+    import win32gui
+    import win32con
+elif sys.platform == 'darwin':
+    try:
+        from AppKit import NSWorkspace
+    except ImportError:
+        print("警告: 无法导入AppKit模块，某些Mac特定功能可能不可用")
+elif sys.platform == 'linux':
+    try:
+        from Xlib import X, display
+    except ImportError:
+        print("警告: 无法导入Xlib模块，某些Linux特定功能可能不可用")
 
 # 全局变量
-DATA_DIR = Path(__file__).parent / "data"
+DATA_DIR = Path.home() / "keylogger" / "data"
 DB_PATH = DATA_DIR / "keylogger.db"
 MAC_ADDRESS = str(uuid.getnode())
 TODAY = datetime.now().strftime("%Y-%m-%d")
 is_recording = True
 last_move_time = None  # 添加鼠标移动时间全局变量
+
+# 创建Flask应用
 app = Flask(__name__)
-icon = None  # 系统托盘图标
+
+def init_flask_app():
+    """初始化Flask应用的配置"""
+    global app
+    try:
+        # 设置模板和静态文件目录
+        if getattr(sys, 'frozen', False):
+            # 如果是打包后的exe
+            template_dir = os.path.join(sys._MEIPASS, 'templates')
+            static_dir = os.path.join(sys._MEIPASS, 'static')
+            app.template_folder = template_dir
+            app.static_folder = static_dir
+            print(f"使用打包环境路径: templates={template_dir}, static={static_dir}")
+        else:
+            # 如果是开发环境
+            app.template_folder = 'templates'
+            app.static_folder = 'static'
+            print("使用开发环境路径")
+    except Exception as e:
+        print(f"初始化Flask应用配置失败: {e}")
+        app.template_folder = 'templates'
+        app.static_folder = 'static'
 
 # 定义操作超时时间（5分钟，单位：毫秒）
 ACTIVITY_TIMEOUT = 5 * 60 * 1000
@@ -56,23 +90,37 @@ def create_round_icon(width, height, color):
     dc.ellipse([0, 0, width-1, height-1], fill=color)
     return image
 
-def load_icon_image():
-    """
-    加载系统托盘图标图像，使用工作留痕.png文件
-    """
-    # 尝试加载工作留痕图标
-    icon_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static', 'img', '工作留痕.png')
-    if os.path.exists(icon_path):
-        print(f"加载工作留痕图标: {icon_path}")
-        return Image.open(icon_path)
-    else:
-        # 如果找不到工作留痕图标，尝试使用秒表图标作为备用
-        backup_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static', 'img', '秒表.png')
+def get_resource_path(relative_path):
+    """获取资源文件的绝对路径，支持开发环境和打包环境"""
+    try:
+        # PyInstaller创建临时文件夹，将路径存储在_MEIPASS中
+        base_path = getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__)))
+        return os.path.join(base_path, relative_path)
+    except Exception as e:
+        print(f"获取资源路径出错: {e}")
+        return os.path.join(os.path.dirname(os.path.abspath(__file__)), relative_path)
+
+def load_icon():
+    """加载系统托盘图标"""
+    try:
+        # 尝试加载工作留痕图标
+        icon_path = get_resource_path(os.path.join('static', 'img', '工作留痕.png'))
+        if os.path.exists(icon_path):
+            print(f"加载工作留痕图标: {icon_path}")
+            return Image.open(icon_path)
+        
+        # 如果找不到工作留痕图标，尝试使用秒表图标
+        backup_path = get_resource_path(os.path.join('static', 'img', '秒表.png'))
         if os.path.exists(backup_path):
             print(f"加载备用图标: {backup_path}")
             return Image.open(backup_path)
-        else:
-            raise FileNotFoundError(f"找不到图标文件: {icon_path}或{backup_path}，请确保图标文件存在")
+        
+        # 如果都找不到，创建一个默认的圆形图标
+        print("找不到图标文件，创建默认图标")
+        return create_round_icon(32, 32, '#007AFF')
+    except Exception as e:
+        print(f"加载图标出错: {e}")
+        return create_round_icon(32, 32, '#007AFF')
 
 def add_to_startup():
     """添加到开机自启动"""
@@ -160,32 +208,26 @@ def is_in_startup():
         return os.path.exists(plist_path)
     return False
 
-def ensure_data_directory():
-    """确保数据目录存在并具有正确的权限"""
+def ensure_data_dir():
+    """确保数据目录存在"""
     try:
-        print(f"正在创建数据目录: {DATA_DIR}")
         DATA_DIR.mkdir(parents=True, exist_ok=True)
-        
-        # 检查目录权限
-        if not os.access(DATA_DIR, os.W_OK):
-            print(f"警告: 数据目录没有写入权限: {DATA_DIR}")
-            # 尝试修改权限
-            try:
-                os.chmod(DATA_DIR, 0o777)
-                print("已修改数据目录权限")
-            except Exception as e:
-                print(f"修改目录权限失败: {e}")
-                return False
-        
-        print(f"数据目录创建成功: {DATA_DIR}")
+        print(f"数据目录已创建/确认: {DATA_DIR}")
         return True
     except Exception as e:
-        print(f"创建数据目录失败: {e}")
-        return False
+        print(f"警告: 创建数据目录失败: {e}")
+        # 检查目录是否已存在且可访问
+        if DATA_DIR.exists() and os.access(DATA_DIR, os.R_OK | os.W_OK):
+            print(f"数据目录已存在且可访问: {DATA_DIR}")
+            return True
+        else:
+            print(f"错误: 无法访问数据目录: {DATA_DIR}")
+            messagebox.showerror("错误", f"无法访问数据目录: {e}")
+            return False
 
-# 确保数据目录存在
-if not ensure_data_directory():
-    print("错误: 无法创建或访问数据目录")
+# 检查数据目录
+if not ensure_data_dir():
+    print("错误: 无法创建或访问数据目录，程序退出")
     sys.exit(1)
 
 # 数据库设置
@@ -798,7 +840,7 @@ class KeyLoggerApp:
     
     def create_tray_icon(self):
         # 创建系统托盘图标
-        image = load_icon_image()
+        image = load_icon()
         
         menu = (
             pystray.MenuItem("显示主窗口", self.show_window),
@@ -824,14 +866,14 @@ class KeyLoggerApp:
         is_recording = True
         self.recording_var.set(True)
         self.update_ui()
-        self.icon.icon = load_icon_image()
+        self.icon.icon = load_icon()
     
     def stop_recording(self, icon=None, item=None):
         global is_recording
         is_recording = False
         self.recording_var.set(False)
         self.update_ui()
-        self.icon.icon = load_icon_image()
+        self.icon.icon = load_icon()
     
     def toggle_startup(self):
         if self.startup_var.get():
@@ -909,7 +951,7 @@ def main():
     
     if args.background:
         # 创建系统托盘图标
-        image = load_icon_image()
+        image = load_icon()
         
         menu = (
             pystray.MenuItem("显示主窗口", lambda: start_gui(True)),
@@ -1006,6 +1048,8 @@ def migrate_json_to_sqlite():
         session.rollback()
 
 def run_flask():
+    """运行Flask服务器"""
+    init_flask_app()  # 初始化Flask配置
     app.run(debug=False, threaded=True)
 
 def on_closing():
